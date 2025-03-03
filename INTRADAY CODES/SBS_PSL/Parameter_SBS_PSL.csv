@@ -1,0 +1,14 @@
+entry_time,exit_time,last_trade_time,trade_interval,method,sell_sl,sell_trail,sell_sl_trail,sell_track_original,buy_flag,buy_sl,buy_trail,buy_sl_trail,buy_track_original,sell2_flag,om
+09:20:00,15:25:00,10:00:00,1min,HL,0,0,0,FALSE,FALSE,0,0,0,FALSE,FALSE,0
+,,10:30:00,,,20,,,,,20,,,,,0.1
+,,11:00:00,,,30,,,,,30,,,,,0.15
+,,12:00:00,,,40,,,,,40,,,,,0.2
+,,13:00:00,,,50,,,,,50,,,,,0.25
+,,14:00:00,,,75,,,,,70,,,,,0.3
+,,15:00:00,,,100,,,,,100,,,,,0.4
+,,,,,,,,,,,,,,,0.5
+,,,,,,,,,,,,,,,0.6
+,,,,,,,,,,,,,,,0.7
+,,,,,,,,,,,,,,,0.8
+,,,,,,,,,,,,,,,0.9
+,,,,,,,,,,,,,,,1

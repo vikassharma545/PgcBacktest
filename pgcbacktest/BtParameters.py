@@ -1,5 +1,65 @@
+import sys
+import ctypes
+import argparse
 import itertools
 import pandas as pd
+
+def get_dte_file(pickle_path):
+    dte_file = pd.read_csv(f"{pickle_path}DTE.csv", parse_dates=['Date'], dayfirst=True).set_index("Date")
+    return dte_file
+
+def get_meta_data(code, meta_data_path):
+    
+    meta_data = pd.read_csv(meta_data_path)
+    
+    meta_row_nos = None
+    if 'ipykernel' not in sys.modules:
+        parser = argparse.ArgumentParser()
+        parser.add_argument('-r', '--MetaRowNo', type=int)
+        args = parser.parse_args()
+
+        if args.MetaRowNo is not None:
+            meta_row_nos = [args.MetaRowNo]
+
+        ctypes.windll.kernel32.SetConsoleTitleW(f"{code} {meta_row_nos}")
+        
+    meta_row_nos = meta_row_nos or range(len(meta_data))
+    return meta_data, meta_row_nos
+
+def get_meta_row_data(meta_row, pickle_path, weekly=False):
+    index = meta_row['index']
+    from_date = pd.to_datetime(meta_row['from_date'].replace(' ', '').replace('/', '-'), format="%d-%m-%Y")
+    to_date = pd.to_datetime(meta_row['to_date'].replace(' ', '').replace('/', '-'), format="%d-%m-%Y")
+    start_time = pd.to_datetime(meta_row['start_time'].replace(' ', '')[0:5], format="%H:%M").time()
+    end_time = pd.to_datetime(meta_row['end_time'].replace(' ', '')[0:5], format="%H:%M").time()
+    dte_file = get_dte_file(pickle_path)
+
+    if not weekly:
+        dte = meta_row['dte']
+        date_lists = dte_file.loc[(dte_file.index >= from_date) & (dte_file.index <= to_date) & (dte_file[index] == dte)].index.to_list()    
+        return index, dte, from_date, to_date, start_time, end_time, date_lists
+    else:
+        from_dte, to_dte = meta_row['from_dte'], meta_row['to_dte']
+        date_lists = dte_file.loc[(dte_file.index >= from_date) & (dte_file.index <= to_date)].index.to_list()
+        
+        week_dates, week_lists = [], []
+        prev_dte = 99
+
+        for date in date_lists:
+            dte = int(dte_file.loc[date, index])
+
+            if prev_dte > dte:
+                week_dates.append(date)
+            else:
+                week_lists.append(week_dates)
+                week_dates = [date]
+
+            prev_dte = dte
+
+        if week_dates:
+            week_lists.append(week_dates)
+        
+        return index, from_dte, to_dte, from_date, to_date, start_time, end_time, week_lists
 
 def get_parameter_data(code, parameter_path):
     

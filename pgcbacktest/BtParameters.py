@@ -179,6 +179,8 @@ def get_parameter_data(code, parameter_path):
         parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
         parameter.loc[parameter['sl'] == 0, 're_sl'] = 0
         
+        parameter['re_sl'] = parameter.apply(lambda row: row['sl'] + float(row['re_sl'].split('+')[-1]) if '+' in str(row['re_sl']) else float(row['re_sl']), axis=1)
+        
         parameter['orderside'] = parameter['orderside'].str.upper()
         parameter['method'] = parameter['method'].str.upper()
 

@@ -35,11 +35,11 @@ def get_meta_row_data(meta_row, pickle_path, weekly=False):
     dte_file = get_dte_file(pickle_path)
 
     if not weekly:
-        dte = meta_row['dte']
+        dte = int(meta_row['dte'])
         date_lists = dte_file.loc[(dte_file.index >= from_date) & (dte_file.index <= to_date) & (dte_file[index] == dte)].index.to_list()    
         return index, dte, from_date, to_date, start_time, end_time, date_lists
     else:
-        from_dte, to_dte = meta_row['from_dte'], meta_row['to_dte']
+        from_dte, to_dte = int(meta_row['from_dte']), int(meta_row['to_dte'])
         date_lists = dte_file.loc[(dte_file.index >= from_date) & (dte_file.index <= to_date)].index.to_list()
         
         week_dates, week_lists = [], []
@@ -266,7 +266,7 @@ def get_parameter_data(code, parameter_path):
         parameter['method'] = parameter['method'].str.upper()
 
 
-    elif code == 'SRE':
+    elif code == 'SRE' or code == 'SREW':
 
         #filer intra sl
         parameter['intra_sl'] = parameter.apply(lambda row: row['sl'] + float(row['intra_sl'].split('+')[-1]) if '+' in str(row['intra_sl']) else float(row['intra_sl']), axis=1)

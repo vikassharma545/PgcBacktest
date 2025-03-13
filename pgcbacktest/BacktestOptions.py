@@ -837,3 +837,107 @@ class WeeklyBacktest(IntradayBacktest):
                 return (exit_time, per_minute_mtm_series)
             else:
                 return (sl_price, sl_flag, intra_sl_flag, target_flag, exit_time, pnl)
+            
+    @lru_cache(maxsize=None)
+    def sl_check_combine_leg(self, start_dt, end_dt, ce_scrip, pe_scrip, o=None, sl=0, intra_sl=0, sl_price=None, intra_sl_price=None, target_price=None, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False):
+        sl_flag, intra_sl_flag, target_flag, exit_time, pnl = False, False, False, '', 0
+
+        try:
+            scrip_df = self.get_straddle_data(start_dt, end_dt, ce_scrip, pe_scrip).copy()
+            if scrip_df.empty: raise DataEmptyError
+
+            o = scrip_df['close'].iloc[0] if o is None else o
+            slipage = self.Cal_slipage(o) if pl_with_slipage else 0
+
+            if from_next_minute: scrip_df = scrip_df.iloc[1:]
+            if scrip_df.empty: raise DataEmptyError
+
+            h, l, cl, ch, c = scrip_df['high'].max(), scrip_df['low'].min(), scrip_df['close'].min(), scrip_df['close'].max() , scrip_df['close'].iloc[-1]
+
+            if orderside == 'SELL':
+                sl_price_val = (((100 + sl) / 100) * o if sl_price is None else sl_price) if (sl or sl_price) else (ch + 1)
+                intra_sl_price_val = (((100 + intra_sl) / 100) * o if intra_sl_price is None else intra_sl_price) if (intra_sl or intra_sl_price) else (h + 1)
+                target_price = target_price if target_price is not None else (cl - 1)
+
+                mask_intra_sl = scrip_df['high'] >= intra_sl_price_val
+                mask_sl = scrip_df['close'] >= sl_price_val
+                mask_target = scrip_df['close'] <= target_price
+
+            elif orderside == 'BUY':
+                sl_price_val = (((100 - sl) / 100) * o if sl_price is None else sl_price) if (sl or sl_price) else (cl - 1)
+                intra_sl_price_val = (((100 - intra_sl) / 100) * o if intra_sl_price is None else intra_sl_price) if (intra_sl or intra_sl_price) else (l - 1)
+                target_price = target_price if target_price is not None else (ch + 1)
+
+                mask_intra_sl = scrip_df['low'] <= intra_sl_price_val
+                mask_sl = scrip_df['close'] <= sl_price_val
+                mask_target = scrip_df['close'] >= target_price
+
+            combined_mask = mask_intra_sl | mask_sl | mask_target
+
+            if combined_mask.any():
+                exit_row = scrip_df.loc[combined_mask.idxmax()]
+                exit_time = exit_row['date_time']
+
+                if orderside == 'SELL':
+                    if exit_row['high'] >= intra_sl_price_val:
+                        sl_flag, intra_sl_flag = True, True
+                        exit_price = intra_sl_price_val
+                    elif exit_row['close'] >= sl_price_val:
+                        sl_flag = True
+                        exit_price = exit_row['close']
+                    elif exit_row['close'] <= target_price:
+                        target_flag = True
+                        exit_price = exit_row['close']
+                elif orderside == 'BUY':
+                    if exit_row['low'] <= intra_sl_price_val:
+                        sl_flag, intra_sl_flag = True, True
+                        exit_price = intra_sl_price_val
+                    elif exit_row['close'] <= sl_price_val:
+                        sl_flag = True
+                        exit_price = exit_row['close']
+                    elif exit_row['close'] >= target_price:
+                        target_flag = True
+                        exit_price = exit_row['close']
+            else:
+                exit_price = c
+
+            pnl = (exit_price - o) if orderside == 'BUY' else (o - exit_price)
+            pnl = round(pnl - slipage, 2)
+
+            if per_minute_mtm:
+                
+                scrip_df.set_index('date_time', inplace=True)
+                if exit_time:
+                    scrip_df = scrip_df.loc[scrip_df.index <= exit_time]
+
+                per_minute_mtm_series = o - scrip_df['close'] if orderside == 'SELL' else scrip_df['close'] - o
+                per_minute_mtm_series = per_minute_mtm_series - slipage
+                per_minute_mtm_series.iloc[-1] = pnl
+
+        except DataEmptyError:
+            sl_flag, intra_sl_flag, target_flag, exit_time, pnl = False, False, False, '', 0
+            o, h, l, c = '', '', '', ''
+            per_minute_mtm_series = pd.Series()
+            sl_price_val, intra_sl_price_val = '', ''
+        except Exception as e:
+            print('sl_check_combine_leg', e)
+            traceback.print_exc()
+            sl_flag, intra_sl_flag, target_flag, exit_time, pnl = False, False, False, '', 0
+            o, h, l, c = '', '', '', ''
+            per_minute_mtm_series = pd.Series()
+            sl_price_val, intra_sl_price_val = '', ''
+
+        sl_price = sl_price_val if (sl or sl_price) else ''
+        intra_sl_price = intra_sl_price_val if (intra_sl or intra_sl_price) else ''
+
+        if with_ohlc:
+            ohlc_data = (o, h, l, c, sl_price, intra_sl_price)
+            if per_minute_mtm:
+                return (*ohlc_data, exit_time, per_minute_mtm_series)
+            else:
+                return (*ohlc_data, sl_flag, intra_sl_flag, target_flag, exit_time, pnl)
+        else:
+            if per_minute_mtm:
+                return (exit_time, per_minute_mtm_series)
+            else:
+                return (sl_price, intra_sl_price, sl_flag, intra_sl_flag, target_flag, exit_time, pnl)

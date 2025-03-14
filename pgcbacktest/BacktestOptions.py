@@ -122,7 +122,7 @@ class IntradayBacktest:
                 ce_scrip_list = [f"{round_syn_future}CE", f"{round_syn_future+self.gap}CE", f"{round_syn_future-self.gap}CE"]
                 pe_scrip_list = [f"{round_syn_future}PE", f"{round_syn_future+self.gap}PE", f"{round_syn_future-self.gap}PE"]
                 
-                min_value = float("inf")
+                scrip_index, min_value = None, float("inf")
                 for i in range(3):
                     try:
                         ce_price = self.options_data.loc[(start_dt,ce_scrip_list[i]),'close']
@@ -145,7 +145,7 @@ class IntradayBacktest:
                 ce_price, pe_price = self.options_data.loc[(start_dt,ce_scrip),'close'], self.options_data.loc[(start_dt,pe_scrip),'close']
                 
                 return ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt
-            except (IndexError, KeyError, ValueError):
+            except (IndexError, KeyError, ValueError, TypeError):
                 start_dt += datetime.timedelta(minutes = 1)
             except Exception as e:
                 print('get_straddle_strike', e)
@@ -203,7 +203,7 @@ class IntradayBacktest:
                     return self.get_straddle_strike(start_dt)
                 else:
                     return ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt
-            except (IndexError, KeyError, ValueError):
+            except (IndexError, KeyError, ValueError, TypeError):
                 start_dt += datetime.timedelta(minutes = 1)
             except Exception as e:
                 print('get_straddle_strike', e)

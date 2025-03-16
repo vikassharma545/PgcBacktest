@@ -1,2 +1,6 @@
 entry_time,exit_time,orderside,sl,intra_sl,om
 09:20:00,15:29:00,sell,70,sl+50,0
+,,,80,,0.5
+,,,90,,1
+,,,100,,1SD
+,,,,,2SD

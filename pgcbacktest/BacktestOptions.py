@@ -1106,6 +1106,9 @@ class WeeklyBacktest(IntradayBacktest):
             else:
                 exit_price = c
 
+            if sl_flag and exit_time.time() == datetime.time(9,15):
+                exit_price = scrip_df.loc[scrip_df['date_time'] == exit_time, 'close'].iloc[0]
+
             pnl = (exit_price - o) if orderside == 'BUY' else (o - exit_price)
             pnl = round(pnl - slipage, 2)
 
@@ -1149,7 +1152,7 @@ class WeeklyBacktest(IntradayBacktest):
             
             
     @lru_cache(maxsize=None)
-    def sl_range_check_combine_leg(self, start_dt, end_dt, ce_scrip, pe_scrip, lower_range, upper_range, intra_lower_range, intra_upper_range, straddle_strike, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False, eod_modify=False, range_sl=None, intra_range_sl=None, is_on_synthetic=False, need_day_wise_mtm=False, day_wise_mtm={}, day_wise_mtm2={}):
+    def sl_range_check_combine_leg(self, start_dt, end_dt, ce_scrip, pe_scrip, lower_range, upper_range, intra_lower_range, intra_upper_range, straddle_strike, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False, eod_modify=False, range_sl=None, intra_range_sl=None, is_on_synthetic=False, need_day_wise_mtm=False):
         sl_flag, intra_sl_flag, exit_time, pnl = False, False, '', 0
         exit_price = None
 
@@ -1165,6 +1168,7 @@ class WeeklyBacktest(IntradayBacktest):
             h, l, cl, ch, c = scrip_df['high'].max(), scrip_df['low'].min(), scrip_df['close'].min(), scrip_df['close'].max() , scrip_df['close'].iloc[-1]
             slipage = self.Cal_slipage(o) if pl_with_slipage else 0
             
+            day_wise_mtm, day_wise_mtm2 = {}, {}
             dstart, dstartprice = scrip_df['date_time'].iloc[0], o
             for idx in range(len(scrip_df)-1):
                 
@@ -1196,15 +1200,15 @@ class WeeklyBacktest(IntradayBacktest):
                         exit_time = current_dt
                         exit_price = current_close
                         break
-                except Exception as e:
-                    print(e)
+                except:
+                    pass
 
                 if eod_modify and current_dt.date() != scrip_df['date_time'].iloc[idx + 1].date():
                     try:
                         _, _, std_tce_price, std_tpe_price, _, _ = self.get_EOD_straddle_strike(current_dt.date())
                         lower_range, upper_range, intra_lower_range, intra_upper_range = self.get_sl_range(straddle_strike, std_tce_price+std_tpe_price, range_sl, intra_range_sl)
-                    except Exception as e:
-                        print(e)
+                    except:
+                        pass
 
                 if need_day_wise_mtm and current_dt.date() != scrip_df['date_time'].iloc[idx + 1].date():
                     dend, dendprice = current_dt, current_close
@@ -1252,9 +1256,15 @@ class WeeklyBacktest(IntradayBacktest):
             if per_minute_mtm:
                 return (*ohlc_data, exit_time, per_minute_mtm_series)
             else:
-                return (*ohlc_data, sl_flag, intra_sl_flag, exit_time, pnl)
+                if need_day_wise_mtm:
+                    return (*ohlc_data, sl_flag, intra_sl_flag, exit_time, day_wise_mtm, day_wise_mtm2, pnl)
+                else:
+                    return (*ohlc_data, sl_flag, intra_sl_flag, exit_time, pnl)
         else:
             if per_minute_mtm:
                 return (exit_time, per_minute_mtm_series)
             else:
-                return (sl_flag, intra_sl_flag, exit_time, pnl)
+                if need_day_wise_mtm:
+                    return (sl_flag, intra_sl_flag, exit_time, day_wise_mtm, day_wise_mtm2, pnl)
+                else:
+                    return (sl_flag, intra_sl_flag, exit_time, pnl)

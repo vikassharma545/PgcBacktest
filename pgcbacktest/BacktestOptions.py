@@ -1002,6 +1002,9 @@ class WeeklyBacktest(IntradayBacktest):
                         exit_price = target_price
             else:
                 exit_price = c
+                
+            if sl_flag and exit_time.time() == datetime.time(9,15):
+                exit_price = scrip_df.loc[scrip_df['date_time'] == exit_time, 'close'].iloc[0]
 
             pnl = (exit_price - o) if orderside == 'BUY' else (o - exit_price)
             pnl = round(pnl - slipage, 2)
@@ -1050,6 +1053,7 @@ class WeeklyBacktest(IntradayBacktest):
         try:
             scrip_df = self.get_straddle_data(start_dt, end_dt, ce_scrip, pe_scrip).copy()
             if scrip_df.empty: raise DataEmptyError
+            scrip_df.loc[scrip_df['date_time'].dt.time == datetime.time(9,15), 'high'] = scrip_df['close']
 
             o = scrip_df['close'].iloc[0] if o is None else o
             slipage = self.Cal_slipage(o) if pl_with_slipage else 0

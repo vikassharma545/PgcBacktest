@@ -1158,7 +1158,7 @@ class WeeklyBacktest(IntradayBacktest):
     @lru_cache(maxsize=None)
     def sl_range_check_combine_leg(self, start_dt, end_dt, ce_scrip, pe_scrip, lower_range, upper_range, intra_lower_range, intra_upper_range, straddle_strike, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False, eod_modify=False, range_sl=None, intra_range_sl=None, is_on_synthetic=False, need_day_wise_mtm=False):
         sl_flag, intra_sl_flag, exit_time, pnl = False, False, '', 0
-        exit_price = None
+        day_wise_mtm, day_wise_mtm2 = {}, {}
 
         try:
             scrip_df = self.get_straddle_data(start_dt, end_dt, ce_scrip, pe_scrip).copy()
@@ -1172,7 +1172,6 @@ class WeeklyBacktest(IntradayBacktest):
             h, l, cl, ch, c = scrip_df['high'].max(), scrip_df['low'].min(), scrip_df['close'].min(), scrip_df['close'].max() , scrip_df['close'].iloc[-1]
             slipage = self.Cal_slipage(o) if pl_with_slipage else 0
             
-            day_wise_mtm, day_wise_mtm2 = {}, {}
             dstart, dstartprice = scrip_df['date_time'].iloc[0], o
             current_dt = scrip_df['date_time'].iloc[0]
             for idx in range(len(scrip_df)-1):
@@ -1249,12 +1248,14 @@ class WeeklyBacktest(IntradayBacktest):
             sl_flag, intra_sl_flag, exit_time, pnl = False, False, '', 0
             o, h, l, c = '', '', '', ''
             per_minute_mtm_series = pd.Series()
+            day_wise_mtm, day_wise_mtm2 = {}, {}
         except Exception as e:
             print('sl_check_combine_leg', e)
             traceback.print_exc()
             sl_flag, intra_sl_flag, exit_time, pnl = False, False, '', 0
             o, h, l, c = '', '', '', ''
             per_minute_mtm_series = pd.Series()
+            day_wise_mtm, day_wise_mtm2 = {}, {}
 
         if with_ohlc:
             ohlc_data = (o, h, l, c)

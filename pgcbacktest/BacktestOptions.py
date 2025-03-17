@@ -1174,6 +1174,7 @@ class WeeklyBacktest(IntradayBacktest):
             
             day_wise_mtm, day_wise_mtm2 = {}, {}
             dstart, dstartprice = scrip_df['date_time'].iloc[0], o
+            current_dt = scrip_df['date_time'].iloc[0]
             for idx in range(len(scrip_df)-1):
                 
                 data_row = scrip_df.iloc[idx]

@@ -11,9 +11,6 @@ setup(
     license="MIT",
     packages=find_packages(),
     install_requires=[
-        "requests",
-        "numpy",
-        "pandas",
         "tqdm",
     ],
     python_requires=">=3.10",

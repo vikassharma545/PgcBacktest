@@ -136,13 +136,13 @@ class IntradayBacktest:
                         
                 # Required scrip and their price
                 ce_scrip, pe_scrip = ce_scrip_list[scrip_index], pe_scrip_list[scrip_index]
+                ce_price, pe_price = self.options_data.loc[(start_dt,ce_scrip),'close'], self.options_data.loc[(start_dt,pe_scrip),'close']
         
                 if sd:
                     sd_range = (ce_price+pe_price)*sd
                     sd_range = max(self.gap, round(sd_range/self.gap)*self.gap)
                     ce_scrip, pe_scrip = f"{int(ce_scrip[:-2]) + sd_range}CE", f"{int(pe_scrip[:-2]) - sd_range}PE"
-
-                ce_price, pe_price = self.options_data.loc[(start_dt,ce_scrip),'close'], self.options_data.loc[(start_dt,pe_scrip),'close']
+                    ce_price, pe_price = self.options_data.loc[(start_dt,ce_scrip),'close'], self.options_data.loc[(start_dt,pe_scrip),'close']
                 
                 return ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt
             except (IndexError, KeyError, ValueError, TypeError):

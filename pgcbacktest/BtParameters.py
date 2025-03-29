@@ -361,6 +361,10 @@ def get_parameter_data(code, parameter_path):
         parameter['orderside'] = parameter['orderside'].str.upper()
         parameter['ut_orderside'] = parameter['orderside'].str.upper()
         parameter['ut_method'] = parameter['ut_method'].str.upper()
+        
+        
+    elif code == 'IRONFLY':
+        parameter = parameter[parameter['sl'] != 0]
 
 
     parameter.drop_duplicates(inplace=True, ignore_index=True)

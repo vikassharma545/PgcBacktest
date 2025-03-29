@@ -947,6 +947,7 @@ class WeeklyBacktest(IntradayBacktest):
             scrip_df = self.get_single_leg_data(start_dt, end_dt, scrip).copy()
             if scrip_df.empty: raise DataEmptyError
             scrip_df.loc[scrip_df['date_time'].dt.time == datetime.time(9,15), 'high'] = scrip_df['close']
+            scrip_df.loc[scrip_df['date_time'].dt.time == datetime.time(9,15), 'low'] = scrip_df['close']
 
             o = scrip_df['close'].iloc[0] if o is None else o
             slipage = self.Cal_slipage(o) if pl_with_slipage else 0
@@ -1054,6 +1055,7 @@ class WeeklyBacktest(IntradayBacktest):
             scrip_df = self.get_straddle_data(start_dt, end_dt, ce_scrip, pe_scrip).copy()
             if scrip_df.empty: raise DataEmptyError
             scrip_df.loc[scrip_df['date_time'].dt.time == datetime.time(9,15), 'high'] = scrip_df['close']
+            scrip_df.loc[scrip_df['date_time'].dt.time == datetime.time(9,15), 'low'] = scrip_df['close']
 
             o = scrip_df['close'].iloc[0] if o is None else o
             slipage = self.Cal_slipage(o) if pl_with_slipage else 0
@@ -1274,3 +1276,47 @@ class WeeklyBacktest(IntradayBacktest):
                     return (sl_flag, intra_sl_flag, exit_time, day_wise_mtm, day_wise_mtm2, pnl)
                 else:
                     return (sl_flag, intra_sl_flag, exit_time, pnl)
+                
+    @lru_cache(maxsize=None)
+    def decay_check_single_leg(self, start_dt, end_dt, scrip, decay=None, decay_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False):
+        
+        decay_flag, decay_time = False, ''
+        
+        try:
+            scrip_df = self.get_single_leg_data(start_dt, end_dt, scrip).copy()
+            if scrip_df.empty: raise DataEmptyError
+            scrip_df.loc[scrip_df['date_time'].dt.time == datetime.time(9,15), 'high'] = scrip_df['close']
+            scrip_df.loc[scrip_df['date_time'].dt.time == datetime.time(9,15), 'low'] = scrip_df['close']
+
+            o = scrip_df['close'].iloc[0]
+
+            if from_next_minute: scrip_df = scrip_df.iloc[1:]
+            if scrip_df.empty: raise DataEmptyError
+                
+            h, l, c = scrip_df['high'].max(), scrip_df['low'].min(), scrip_df['close'].iloc[-1]
+
+            if orderside == 'SELL':
+                decay_price = ((100 - decay)/100) * o if decay_price is None else decay_price
+                mask_decay = (scrip_df['close'] if from_candle_close else scrip_df['low']) <= decay_price
+
+            elif orderside == 'BUY':
+                decay_price = ((100 + decay)/100) * o if decay_price is None else decay_price
+                mask_decay = (scrip_df['close'] if from_candle_close else scrip_df['high']) >= decay_price
+
+            if mask_decay.any():
+                decay_flag = True
+                decay_time = scrip_df.loc[mask_decay.idxmax(), 'date_time']
+
+        except DataEmptyError:
+            decay_flag, decay_time = False, ''
+            o, h, l, c = '', '', '', ''
+        except Exception as e:
+            print('decay_check_single_leg', e)
+            traceback.print_exc()
+            decay_flag, decay_time = False, ''
+            o, h, l, c = '', '', '', ''
+
+        if with_ohlc:
+            return o, h, l, c, decay_price, decay_flag, decay_time
+        else:
+            return decay_price, decay_flag, decay_time

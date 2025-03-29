@@ -174,7 +174,7 @@ def get_parameter_data(code, parameter_path):
         parameter['method'] = parameter['method'].str.upper()
         
             
-    elif code == 'NRE':
+    elif (code == 'NRE') or (code == 'NREW'):
         # filter - where sl = 0
         parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
         parameter.loc[parameter['sl'] == 0, 're_sl'] = 0

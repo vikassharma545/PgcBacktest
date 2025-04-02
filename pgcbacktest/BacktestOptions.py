@@ -1320,3 +1320,22 @@ class WeeklyBacktest(IntradayBacktest):
             return o, h, l, c, decay_price, decay_flag, decay_time
         else:
             return decay_price, decay_flag, decay_time
+
+
+class MonthlyBacktest(WeeklyBacktest):
+
+    def __init__(self, pickle_path, index, month_dates, from_dte, to_dte, start_time, end_time):
+        
+        self.pickle_path, self.index, self.month_dates, self.from_dte, self.to_dte = pickle_path, index, month_dates, from_dte, to_dte
+        
+        self.current_month_dates = sorted(set(([self.month_dates[0]] * (31 - len(self.month_dates)) + self.month_dates)[-from_dte : None if to_dte == 1 else -to_dte + 1]))
+        self.__future_pickle_path, self.__option_pickle_path = self.get_future_option_path(index)
+        self.future_data = pd.concat([pd.read_pickle(self.__future_pickle_path.format(date=current_date.date())) for current_date in self.current_month_dates])
+        self.future_data.sort_values(by='date_time', inplace=True)
+        self.future_data.set_index('date_time', inplace=True)
+        
+        self.options = pd.concat([pd.read_pickle(self.__option_pickle_path.format(date=current_date.date())) for current_date in self.current_month_dates])
+        self.options = self.options[(self.options['date_time'].dt.time >= start_time) & (self.options['date_time'].dt.time <= end_time)]
+        self.options_data = self.options.set_index(['date_time', 'scrip'])
+        self.gap = self.get_gap()
+

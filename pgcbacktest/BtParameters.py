@@ -8,6 +8,10 @@ def get_dte_file(pickle_path):
     dte_file = pd.read_csv(f"{pickle_path}DTE.csv", parse_dates=['Date'], dayfirst=True).set_index("Date")
     return dte_file
 
+def get_index_data(index, pickle_path):
+    index_df = pd.read_csv(f"{pickle_path}{index}.csv", parse_dates=['datetime'], dayfirst=False)
+    return index_df
+
 def get_meta_data(code, meta_data_path):
     
     meta_data = pd.read_csv(meta_data_path)
@@ -393,10 +397,18 @@ def get_parameter_data(code, parameter_path):
         parameter['orderside'] = parameter['orderside'].str.upper()
         parameter['ut_orderside'] = parameter['orderside'].str.upper()
         parameter['ut_method'] = parameter['ut_method'].str.upper()
-        
+
         
     elif code == 'IRONFLY':
         parameter = parameter[parameter['sl'] != 0]
+        
+        
+    elif code == 'MAC':
+        
+        parameter = parameter[parameter['short_period'] < parameter['long_period']]
+        parameter['orderside'] = parameter['orderside'].str.upper()
+        parameter['short_type'] = parameter['short_type'].str.upper()
+        parameter['long_type'] = parameter['long_type'].str.upper()
 
 
     parameter.drop_duplicates(inplace=True, ignore_index=True)

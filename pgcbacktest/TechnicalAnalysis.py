@@ -1,3 +1,4 @@
+import datetime
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -161,3 +162,77 @@ def plot_supertrend_signals(data, title="SuperTrend Signals"):
     plt.tight_layout()
     plt.show()
 
+
+def rsi(df, period=14, upper=70, lower=30):
+    close = df['close'].to_numpy()
+    delta = np.diff(close, prepend=np.nan)
+
+    gain = np.where(delta > 0, delta, 0)
+    loss = np.where(delta < 0, -delta, 0)
+
+    avg_gain = np.empty_like(close)
+    avg_loss = np.empty_like(close)
+    avg_gain[:period] = np.nan
+    avg_loss[:period] = np.nan
+
+    avg_gain[period] = np.mean(gain[1:period + 1])
+    avg_loss[period] = np.mean(loss[1:period + 1])
+
+    for i in range(period + 1, len(close)):
+        avg_gain[i] = (avg_gain[i - 1] * (period - 1) + gain[i]) / period
+        avg_loss[i] = (avg_loss[i - 1] * (period - 1) + loss[i]) / period
+
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+
+    df['rsi'] = rsi
+    df['rsi_upper'] = upper
+    df['rsi_lower'] = lower
+
+    df['signal'] = np.where(rsi < lower, 1.0, np.where(rsi > upper, -1.0, 0.0))
+    df['signal'] = np.where(np.isnan(rsi), 0.0, df['signal'])
+
+    df['positions'] = df['signal'].diff()
+
+    df['BUY'] = df['positions'].replace({1.0: 'CE', -1.0: '', 0.0: ''})
+    df['SELL'] = df['positions'].replace({1.0: '', -1.0: 'PE', 0.0: ''})
+
+    return df
+
+def plot_rsi_signals(df, title="RSI (Relative Strength Index)"):
+    upper = df['rsi_upper'].iloc[-1] if 'rsi_upper' in df else 70
+    lower = df['rsi_lower'].iloc[-1] if 'rsi_lower' in df else 30
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 8), sharex=True, gridspec_kw={'height_ratios': [2, 1]})
+
+    # Plot close price in top chart
+    ax1.plot(df['datetime'], df['close'], label='Close Price', color='black', linewidth=1)
+    ax1.set_title("Close Price")
+    ax1.set_ylabel("Price")
+    ax1.grid(True)
+    ax1.legend(loc='upper left')
+
+    # Draw vertical lines and time labels only on close price chart
+    if 'positions' in df.columns:
+        cross_points = df[df['positions'].isin([1.0, -1.0])]
+        for _, row in cross_points.iterrows():
+            ax1.axvline(x=row['datetime'], color='black', linestyle='--', alpha=0.3)
+            ax1.text(row['datetime'], df['close'].min(), row['datetime'].strftime('%H:%M'),
+                     rotation=90, fontsize=8, va='bottom', ha='center', color='black')
+
+    # Plot RSI in bottom chart
+    ax2.plot(df['datetime'], df['rsi'], label='RSI', color='blue', linewidth=1.5)
+    ax2.axhline(upper, color='red', linestyle='--', linewidth=1, label=f'Overbought ({upper})')
+    ax2.axhline(lower, color='green', linestyle='--', linewidth=1, label=f'Oversold ({lower})')
+    ax2.axhline(50, color='gray', linestyle='--', linewidth=0.8, alpha=0.5)
+
+    ax2.set_title(title)
+    ax2.set_xlabel("Datetime")
+    ax2.set_ylabel("RSI")
+    ax2.set_ylim(0, 100)
+    ax2.grid(True)
+    ax2.legend(loc='upper left')
+
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.show()

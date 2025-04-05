@@ -7,6 +7,7 @@ from matplotlib.lines import Line2D
 
 def moving_cross_over(data, short_type, short_period, long_type, long_period):
     
+    data = data.copy()
     short_period, long_period = int(short_period), int(long_period)
 
     if short_period > long_period: raise Exception("Sort Period > Long Period")
@@ -31,6 +32,8 @@ def moving_cross_over(data, short_type, short_period, long_type, long_period):
 
 
 def plot_moving_crossover_signals(data, title="Moving Average Crossover Signals"):
+    
+    data = data.copy()
     plt.figure(figsize=(14, 7))
 
     # Plot close price and moving averages
@@ -60,6 +63,7 @@ def plot_moving_crossover_signals(data, title="Moving Average Crossover Signals"
     
 def ATR(df, period=10):
     
+    df = df.copy()
     high = df['high'].to_numpy()
     low = df['low'].to_numpy()
     close = df['close'].to_numpy()
@@ -83,6 +87,8 @@ def ATR(df, period=10):
 
 
 def supertrend(df, period=10, multiplier=3):
+    
+    df = df.copy()
     atr = ATR(df, period).to_numpy()
     
     high = df['high'].to_numpy()
@@ -124,6 +130,8 @@ def supertrend(df, period=10, multiplier=3):
 
 
 def plot_supertrend_signals(data, title="SuperTrend Signals"):
+    
+    data = data.copy()
     plt.figure(figsize=(14, 7))
 
     # Plot close price
@@ -164,6 +172,8 @@ def plot_supertrend_signals(data, title="SuperTrend Signals"):
 
 
 def rsi(df, period=14, upper=70, lower=30):
+    
+    df = df.copy()
     close = df['close'].to_numpy()
     delta = np.diff(close, prepend=np.nan)
 
@@ -200,6 +210,8 @@ def rsi(df, period=14, upper=70, lower=30):
     return df
 
 def plot_rsi_signals(df, title="RSI (Relative Strength Index)"):
+    
+    df = df.copy()
     upper = df['rsi_upper'].iloc[-1] if 'rsi_upper' in df else 70
     lower = df['rsi_lower'].iloc[-1] if 'rsi_lower' in df else 30
 
@@ -236,3 +248,83 @@ def plot_rsi_signals(df, title="RSI (Relative Strength Index)"):
     plt.xticks(rotation=45)
     plt.tight_layout()
     plt.show()
+    
+def macd(df, fast=12, slow=26, signal=9):
+    
+    df = df.copy()
+    close = df['close']
+
+    # Step 1: EMAs
+    ema_fast = close.ewm(span=fast, adjust=False, min_periods=fast).mean()
+    ema_slow = close.ewm(span=slow, adjust=False, min_periods=slow).mean()
+
+    # Step 2: MACD Line
+    macd_line = ema_fast - ema_slow
+
+    # Delay MACD output to match TA-Lib
+    macd_line[:slow + signal - 2] = np.nan
+
+    # Step 3: Signal Line
+    signal_line = macd_line.ewm(span=signal, adjust=False, min_periods=signal).mean()
+
+    # Step 4: Histogram
+    hist = macd_line - signal_line
+
+    signal_line[:slow + signal - 2] = np.nan
+    hist[:slow + signal - 2] = np.nan
+
+    # Assign to DataFrame
+    df['macd'] = macd_line
+    df['macd_signal'] = signal_line
+    df['macd_hist'] = hist
+
+    # Generate crossover signals
+    df['signal'] = 0.0
+    crossover_up = (df['macd'] > df['macd_signal']) & (df['macd'].shift(1) <= df['macd_signal'].shift(1))
+    crossover_down = (df['macd'] < df['macd_signal']) & (df['macd'].shift(1) >= df['macd_signal'].shift(1))
+    df.loc[crossover_up, 'signal'] = 1.0
+    df.loc[crossover_down, 'signal'] = -1.0
+
+    df['positions'] = df['signal']
+    df['BUY'] = df['positions'].replace({1.0: 'CE', -1.0: '', 0.0: ''})
+    df['SELL'] = df['positions'].replace({1.0: '', -1.0: 'PE', 0.0: ''})
+
+    return df
+
+def plot_macd(df, title="MACD (Moving Average Convergence Divergence)"):
+    
+    df = df.copy()
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 8), sharex=True, gridspec_kw={'height_ratios': [2, 1]})
+
+    # Top Panel: Close Price
+    ax1.plot(df['datetime'], df['close'], label='Close Price', color='black', linewidth=1)
+    ax1.set_title("Close Price")
+    ax1.set_ylabel("Price")
+    ax1.grid(True)
+    ax1.legend(loc='upper left')
+
+    # Draw vertical lines and time labels only on top chart
+    if 'positions' in df.columns:
+        cross_points = df[df['positions'].isin([1.0, -1.0])]
+        for _, row in cross_points.iterrows():
+            ax1.axvline(x=row['datetime'], color='black', linestyle='--', alpha=0.3)
+            ax1.text(row['datetime'], df['close'].min(), row['datetime'].strftime('%H:%M'),
+                     rotation=90, fontsize=8, va='bottom', ha='center', color='black')
+
+    # Bottom Panel: MACD Plot
+    ax2.plot(df['datetime'], df['macd'], label='MACD Line', color='blue', linewidth=1.5)
+    ax2.plot(df['datetime'], df['macd_signal'], label='Signal Line', color='orange', linewidth=1.5)
+
+    # Histogram bars
+    ax2.bar(df['datetime'], df['macd_hist'], label='Histogram', color='gray', alpha=0.5, width=0.0005)
+
+    ax2.set_title(title)
+    ax2.set_xlabel("Datetime")
+    ax2.set_ylabel("MACD")
+    ax2.grid(True)
+    ax2.legend(loc='upper left')
+
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.show()
+

@@ -1,4 +1,5 @@
 import os
+import gc
 import datetime
 import requests
 import traceback

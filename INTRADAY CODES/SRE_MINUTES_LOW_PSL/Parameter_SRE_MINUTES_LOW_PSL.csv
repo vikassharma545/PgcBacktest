@@ -1,0 +1,2 @@
+entry_time,exit_time,last_trade_time,trade_interval,orderside,sl,intra_sl,om,re_entries,up_buffer,minutes
+09:20:00,15:25:00,10:00:00,10min,sell,20,sl+10,0,0,0.08,10

@@ -122,7 +122,7 @@ def get_parameter_data(code, parameter_path):
         parameter['method'] = parameter['method'].str.upper()
         
 
-    elif code == 'B120_PSL':
+    elif code == 'B120_PSL' or code == 'B120_DAY_LOW_PSL' or code == 'B120_MINUTES_LOW_PSL':
         
         # filter - entry < (exit_time|endtime - 5min)
         parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
@@ -322,7 +322,7 @@ def get_parameter_data(code, parameter_path):
         parameter['orderside'] = parameter['orderside'].str.upper()
 
 
-    elif code == 'SRE_PSL':
+    elif code == 'SRE_PSL' or code == 'SRE_DAY_LOW_PSL' or code == 'SRE_MINUTES_LOW_PSL':
         
         parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
         parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
@@ -349,7 +349,7 @@ def get_parameter_data(code, parameter_path):
         parameter['ut_method'] = parameter['ut_method'].str.upper()
     
     
-    elif code == 'SUT_PSL':
+    elif code == 'SUT_PSL' or code == 'SUT_DAY_LOW_PSL' or code == 'SUT_MINUTES_LOW_PSL':
         
         parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
         parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]

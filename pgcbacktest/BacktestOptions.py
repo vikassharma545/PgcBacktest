@@ -717,6 +717,45 @@ class IntradayBacktest:
             else:
                 return (sl_price, intra_sl_price, sl_flag, intra_sl_flag, trail_flag, exit_time, pnl)
 
+    
+    def day_low_break(self, start_tt,end_dt, var):
+        a = []
+        low_range = []
+        for i in pd.date_range(datetime.datetime.combine(start_tt.date(),datetime.time(9,15)), datetime.datetime.combine(start_tt.date(),start_tt.time())- datetime.timedelta(minutes = 1),freq='1min') :
+            ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_Time = self.get_straddle_strike(i, i+datetime.timedelta(minutes=1))
+            if ce_scrip:
+                low_range.append(ce_price+pe_price)
+        try:
+            low = min(low_range)
+            low_var = low+(low * var)
+            for i in pd.date_range(start_tt, datetime.datetime.combine(start_tt.date(),end_dt.time())- datetime.timedelta(minutes = 1),freq='1min'):
+                ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_Time = self.get_straddle_strike(i, i+datetime.timedelta(minutes=1))
+                if ce_scrip and  (ce_price + pe_price) < low_var:
+                    return True, start_Time
+                           
+        except :
+            return False, ' '
+    
+        return  False, ' '        
+
+    def minute_low_break(self, start_tt,end_dt, var, mins):
+        a = []
+        low_range = []
+        for i in pd.date_range(start_tt - datetime.timedelta(minutes = mins),datetime.datetime.combine(start_tt.date(),start_tt.time())- datetime.timedelta(minutes = 1),freq='1min') :
+            ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_Time = self.get_straddle_strike(i, i+datetime.timedelta(minutes=1))
+            if ce_scrip:
+                low_range.append(ce_price+pe_price)
+        try:
+            low = min(low_range)
+            low_var = low+(low * var)
+            for i in pd.date_range(start_tt, datetime.datetime.combine(start_tt.date(),end_dt.time())- datetime.timedelta(minutes = 1),freq='1min'):
+               ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_Time = self.get_straddle_strike(i, i+datetime.timedelta(minutes=1))
+               if ce_scrip and  (ce_price + pe_price) < low_var:
+                    return True, start_Time
+        except :
+            return False, ''
+    
+        return  False, ''
 
 class WeeklyBacktest(IntradayBacktest):
 

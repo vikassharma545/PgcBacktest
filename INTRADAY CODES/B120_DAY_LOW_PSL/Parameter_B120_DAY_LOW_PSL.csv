@@ -1,2 +1,9 @@
 entry_time,exit_time,last_trade_time,trade_interval,orderside,method,sl,ut_sl,om,up_buffer
-09:20:00,15:25:00,10:00:00,10min,sell,HL,20,50,0,0.1
+09:20:00,15:25:00,10:00:00,10min,sell,HL,20,50,0,0.02
+,,,,,,,,,0.04
+,,,,,,,,,0.07
+,,,,,,,,,0.1
+,,,,,,,,,0.12
+,,,,,,,,,0.15
+,,,,,,,,,0.17
+,,,,,,,,,0.2

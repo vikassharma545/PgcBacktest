@@ -1,2 +1,0 @@
-entry_time,exit_time,last_trade_time,trade_interval,orderside,method,sl,ut_sl,om,up_buffer,buffer_minute
-09:20:00,15:25:00,10:00:00,10min,sell,HL,20,50,0,0.1,15

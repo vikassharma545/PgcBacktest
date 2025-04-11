@@ -718,37 +718,32 @@ class IntradayBacktest:
                 return (sl_price, intra_sl_price, sl_flag, intra_sl_flag, trail_flag, exit_time, pnl)
 
     @lru_cache(maxsize=None)
-    def day_low_break(self, start_dt, end_dt, var):
+    def straddle_indicator(self, start_dt, end_dt, si_indicator, si_buffer, buffer_min):
 
-        min_low = float('inf')
-        for i in pd.date_range(datetime.datetime.combine(start_dt.date(), datetime.time(9,15)), start_dt - datetime.timedelta(minutes=1), freq='1min'):
-            ce_scrip, pe_scrip, ce_price, pe_price, _, _ = self.get_strike(i, i+datetime.timedelta(minutes=1))
-            if ce_scrip:
-                min_low = min((ce_price+pe_price), min_low)
+        buffer_start = max(datetime.datetime.combine(start_dt.date(), datetime.time(9, 15)), start_dt - datetime.timedelta(minutes=buffer_min))
+        buffer_range = pd.date_range(buffer_start, start_dt - datetime.timedelta(minutes=1), freq='1min')
+        
+        std_prices = [self.get_strike(dt, dt+datetime.timedelta(minutes=1))[2:4] for dt in buffer_range]
+        valid_std_prices = [(ce + pe) for ce, pe in std_prices if ce is not None and pe is not None]
+        
+        if not valid_std_prices:
+            return False, ''
+        
+        if si_indicator == 'LOW':
+            extreme = np.min(valid_std_prices)
+        elif si_indicator == 'HIGH':
+            extreme = np.max(valid_std_prices)
+        elif si_indicator == 'AVG':
+            extreme = np.mean(valid_std_prices)
 
-        low_var = min_low+(min_low * var)
-        for i in pd.date_range(start_dt, end_dt - datetime.timedelta(minutes=5), freq='1min'):
-            ce_scrip, pe_scrip, ce_price, pe_price, _, entry_time = self.get_strike(i, i+datetime.timedelta(minutes=1))
-            if ce_scrip and (ce_price + pe_price) < low_var:
-                return True, entry_time
-    
-        return False, ''
+        threshold = float(extreme) * (1 + si_buffer)
+        for dt in pd.date_range(start_dt, end_dt - datetime.timedelta(minutes=5), freq='1min'):
+            
+            _, _, ce_price, pe_price, _, entry_time = self.get_strike(dt, dt+datetime.timedelta(minutes=1))
+            if entry_time is not None:
+                if (ce_price + pe_price) <= threshold:
+                    return True, entry_time
 
-    @lru_cache(maxsize=None)
-    def minute_low_break(self, start_dt, end_dt, var, mins):
-
-        min_low = float('inf')
-        for i in pd.date_range(start_dt - datetime.timedelta(minutes=mins), start_dt - datetime.timedelta(minutes=1), freq='1min') :
-            ce_scrip, pe_scrip, ce_price, pe_price, _, _ = self.get_strike(i, i+datetime.timedelta(minutes=1))
-            if ce_scrip:
-                min_low = min((ce_price+pe_price), min_low)
-
-        low_var = min_low+(min_low * var)
-        for i in pd.date_range(start_dt, end_dt - datetime.timedelta(minutes=5), freq='1min'):
-            ce_scrip, pe_scrip, ce_price, pe_price, _, entry_time = self.get_strike(i, i+datetime.timedelta(minutes=1))
-            if ce_scrip and (ce_price + pe_price) < low_var:
-                return True, entry_time
-    
         return False, ''
 
 

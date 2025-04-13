@@ -112,7 +112,7 @@ def get_parameter_data(code, parameter_path):
     parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
 
 
-    if (code == 'B120') or (code == 'B120_TTC_RE') or (code == 'B120W') or (code == 'B120M'):
+    if (code == 'B120') or (code == 'B120_TTC_RE') or (code == 'B120W') or (code == 'B120M') or (code == 'B120_SI'):
     
         parameter.loc[parameter['sl'] == 0, 'ut_sl'] = 0
         parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
@@ -120,6 +120,9 @@ def get_parameter_data(code, parameter_path):
         parameter['ut_sl'] = parameter['ut_sl'].apply(lambda x: str(x).upper() if x == 'TTC' else str(x).upper())
         parameter['orderside'] = parameter['orderside'].str.upper()
         parameter['method'] = parameter['method'].str.upper()
+        
+        if code == 'B120_SI':
+            parameter['std_indicator'] = parameter['std_indicator'].str.upper()
         
 
     elif (code == 'B120_PSL') or (code == 'B120_SI_PSL'):
@@ -193,12 +196,15 @@ def get_parameter_data(code, parameter_path):
         parameter['method'] = parameter['method'].str.upper()
 
 
-    elif code == 'DT':
+    elif (code == 'DT') or (code == 'DT_SI'):
         # filter - where sl = 0
         parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
         
         parameter['orderside'] = parameter['orderside'].str.upper()
         parameter['method'] = parameter['method'].str.upper()
+        
+        if code == 'DT_SI':
+            parameter['std_indicator'] = parameter['std_indicator'].str.upper()
             
         
     elif code == 'DT_PSL':
@@ -213,7 +219,7 @@ def get_parameter_data(code, parameter_path):
         parameter['method'] = parameter['method'].str.upper()
         
             
-    elif (code == 'NRE') or (code == 'NREW'):
+    elif (code == 'NRE') or (code == 'NREW') or (code == 'NRE_SI'):
         # filter - where sl = 0
         parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
         parameter.loc[parameter['sl'] == 0, 're_sl'] = 0
@@ -222,6 +228,9 @@ def get_parameter_data(code, parameter_path):
         
         parameter['orderside'] = parameter['orderside'].str.upper()
         parameter['method'] = parameter['method'].str.upper()
+        
+        if code == 'NRE_SI':
+            parameter['std_indicator'] = parameter['std_indicator'].str.upper()
 
 
     elif code == 'NRE_PSL':
@@ -238,12 +247,15 @@ def get_parameter_data(code, parameter_path):
         parameter['method'] = parameter['method'].str.upper()
 
 
-    elif code == 'RED':
+    elif (code == 'RED') or (code == 'RED_SI'):
         # filter - where sl = 0
         parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
         
         parameter['orderside'] = parameter['orderside'].str.upper()
         parameter['method'] = parameter['method'].str.upper()
+        
+        if code == 'RED_SI':
+            parameter['std_indicator'] = parameter['std_indicator'].str.upper()
 
 
     elif code == 'RED_PSL':
@@ -261,7 +273,7 @@ def get_parameter_data(code, parameter_path):
         parameter['method'] = parameter['method'].str.upper()
 
 
-    elif code == 'SBS':
+    elif (code == 'SBS') or (code == 'SBS_SI'):
         # filter - where sl = 0
         parameter.loc[(parameter['sell_sl'] == 0), 'method'] = 'HL'
         
@@ -279,7 +291,9 @@ def get_parameter_data(code, parameter_path):
         parameter.loc[parameter['buy_flag'] == False, ['sell2_flag']] = False
 
         parameter['method'] = parameter['method'].str.upper()
-    
+        
+        if code == 'SBS_SI':
+            parameter['std_indicator'] = parameter['std_indicator'].str.upper()
     
     elif code == 'SBS_PSL':
         
@@ -305,13 +319,16 @@ def get_parameter_data(code, parameter_path):
         parameter['method'] = parameter['method'].str.upper()
 
 
-    elif code == 'SRE' or code == 'SREW':
+    elif (code == 'SRE') or (code == 'SREW') or (code == 'SRE_SI'):
 
         #filer intra sl
         parameter['intra_sl'] = parameter.apply(lambda row: row['sl'] + float(row['intra_sl'].split('+')[-1]) if '+' in str(row['intra_sl']) else float(row['intra_sl']), axis=1)
         parameter = parameter[~((parameter['intra_sl'] != 0) & (parameter['intra_sl'] <= parameter['sl']))]
 
         parameter['orderside'] = parameter['orderside'].str.upper()
+        
+        if code == 'SRE_SI':
+            parameter['std_indicator'] = parameter['std_indicator'].str.upper()
 
 
     elif code == 'SREW_RANGE':
@@ -341,7 +358,7 @@ def get_parameter_data(code, parameter_path):
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
             
     
-    elif (code == 'SUT') or (code == 'SUTW'):
+    elif (code == 'SUT') or (code == 'SUTW') or (code == 'SUT_SI'):
 
         #filer intra sl
         parameter['intra_sl'] = parameter.apply(lambda row: row['sl'] + float(row['intra_sl'].split('+')[-1]) if '+' in str(row['intra_sl']) else float(row['intra_sl']), axis=1)
@@ -353,6 +370,9 @@ def get_parameter_data(code, parameter_path):
         parameter['orderside'] = parameter['orderside'].str.upper()
         parameter['ut_orderside'] = parameter['orderside'].str.upper()
         parameter['ut_method'] = parameter['ut_method'].str.upper()
+        
+        if code == 'SUT_SI':
+            parameter['std_indicator'] = parameter['std_indicator'].str.upper()
     
     
     elif (code == 'SUT_PSL') or (code == 'SUT_SI_PSL'):

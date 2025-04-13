@@ -1,0 +1,4 @@
+entry_time,exit_time,method,sell_sl,sell_trail,sell_sl_trail,sell_track_original,buy_flag,buy_sl,buy_trail,buy_sl_trail,buy_track_original,sell2_flag,om,std_indicator,indicator_buffer,buffer_minute
+09:20:00,15:25:00,HL,20,0,0,TRUE,TRUE,20,0,0,FALSE,TRUE,0,low,0.05,375
+,,,,,,,,,,,,,,avg,0.1,10
+,,,,,,,,,,,,,,high,0.15,

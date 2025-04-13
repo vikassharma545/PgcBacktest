@@ -1,0 +1,4 @@
+entry_time,exit_time,orderside,method,sl,re_sl,om,std_indicator,indicator_buffer,buffer_minute
+09:20:00,15:25:00,sell,HL,20,sl+0,0,low,0.05,375
+,,,,,,,avg,0.1,10
+,,,,,,,high,0.15,

@@ -207,7 +207,7 @@ def get_parameter_data(code, parameter_path):
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
             
         
-    elif code == 'DT_PSL':
+    elif (code == 'DT_PSL') or (code == 'DT_SI_PSL'):
         parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
         parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
         
@@ -217,6 +217,9 @@ def get_parameter_data(code, parameter_path):
         parameter['trade_interval'] = parameter['trade_interval'].str.upper()
         parameter['orderside'] = parameter['orderside'].str.upper()
         parameter['method'] = parameter['method'].str.upper()
+        
+        if code == 'DT_SI_PSL':
+            parameter['std_indicator'] = parameter['std_indicator'].str.upper()
         
             
     elif (code == 'NRE') or (code == 'NREW') or (code == 'NRE_SI'):
@@ -233,7 +236,7 @@ def get_parameter_data(code, parameter_path):
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
 
 
-    elif code == 'NRE_PSL':
+    elif (code == 'NRE_PSL') or (code == 'NRE_SI_PSL'):
         
         # filter - entry < (exit_time - 5min)
         parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
@@ -245,6 +248,9 @@ def get_parameter_data(code, parameter_path):
         parameter['trade_interval'] = parameter['trade_interval'].str.upper()
         parameter['orderside'] = parameter['orderside'].str.upper()
         parameter['method'] = parameter['method'].str.upper()
+        
+        if code == 'NRE_SI_PSL':
+            parameter['std_indicator'] = parameter['std_indicator'].str.upper()
 
 
     elif (code == 'RED') or (code == 'RED_SI'):
@@ -258,7 +264,7 @@ def get_parameter_data(code, parameter_path):
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
 
 
-    elif code == 'RED_PSL':
+    elif (code == 'RED_PSL') or (code == 'RED_SI_PSL'):
         
         parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
         parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
@@ -271,6 +277,9 @@ def get_parameter_data(code, parameter_path):
         parameter['trade_interval'] = parameter['trade_interval'].str.upper()
         parameter['orderside'] = parameter['orderside'].str.upper()
         parameter['method'] = parameter['method'].str.upper()
+        
+        if code == 'RED_SI_PSL':
+            parameter['std_indicator'] = parameter['std_indicator'].str.upper()
 
 
     elif (code == 'SBS') or (code == 'SBS_SI'):
@@ -295,7 +304,7 @@ def get_parameter_data(code, parameter_path):
         if code == 'SBS_SI':
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
     
-    elif code == 'SBS_PSL':
+    elif (code == 'SBS_PSL') or (code == 'SBS_SI_PSL'):
         
         parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
         parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
@@ -317,6 +326,9 @@ def get_parameter_data(code, parameter_path):
         parameter.loc[parameter['buy_flag'] == False, ['sell2_flag']] = False
 
         parameter['method'] = parameter['method'].str.upper()
+        
+        if code == 'SBS_SI_PSL':
+            parameter['std_indicator'] = parameter['std_indicator'].str.upper()
 
 
     elif (code == 'SRE') or (code == 'SREW') or (code == 'SRE_SI'):

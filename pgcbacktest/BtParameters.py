@@ -180,7 +180,7 @@ def get_parameter_data(code, parameter_path):
         parameter['method'] = parameter['method'].str.upper()
         
         
-    elif (code == 'B120_RE_PSL') or (code == 'B120_DUT_RE_PSL'):
+    elif (code == 'B120_RE_PSL') or (code == 'B120_DUT_RE_PSL') or (code == 'B120_RE_SI_PSL'):
             
         # filter - entry < (exit_time|endtime - 5min)
         parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
@@ -194,6 +194,9 @@ def get_parameter_data(code, parameter_path):
         parameter['trade_interval'] = parameter['trade_interval'].str.upper()
         parameter['orderside'] = parameter['orderside'].str.upper()
         parameter['method'] = parameter['method'].str.upper()
+        
+        if code == 'B120_RE_SI_PSL':
+            parameter['std_indicator'] = parameter['std_indicator'].str.upper()
 
 
     elif (code == 'DT') or (code == 'DT_SI'):

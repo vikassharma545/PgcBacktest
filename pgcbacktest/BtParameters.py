@@ -117,7 +117,7 @@ def get_parameter_data(code, parameter_path):
         parameter.loc[parameter['sl'] == 0, 'ut_sl'] = 0
         parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
         
-        parameter['ut_sl'] = parameter['ut_sl'].apply(lambda x: str(x).upper() if x == 'TTC' else str(x).upper())
+        parameter['ut_sl'] = parameter['ut_sl'].astype(str).str.upper()
         parameter['orderside'] = parameter['orderside'].str.upper()
         parameter['method'] = parameter['method'].str.upper()
         
@@ -135,7 +135,7 @@ def get_parameter_data(code, parameter_path):
         parameter.loc[parameter['sl'] == 0, 'ut_sl'] = 0
         parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
         
-        parameter['ut_sl'] = parameter['ut_sl'].apply(lambda x: str(x).upper() if x == 'TTC' else str(x).upper())
+        parameter['ut_sl'] = parameter['ut_sl'].astype(str).str.upper()
         parameter['trade_interval'] = parameter['trade_interval'].str.upper()
         parameter['orderside'] = parameter['orderside'].str.upper()
         parameter['method'] = parameter['method'].str.upper()
@@ -162,7 +162,7 @@ def get_parameter_data(code, parameter_path):
         parameter.loc[parameter['method'] == 'HL', 'intra_sl'] = 0
         parameter.loc[parameter['method'] == 'HL', 'ut_intra_sl'] = 0
         
-        parameter['ut_sl'] = parameter['ut_sl'].apply(lambda x: str(x).upper() if x == 'TTC' else str(x).upper())
+        parameter['ut_sl'] = parameter['ut_sl'].astype(str).str.upper()
         parameter.loc[parameter['ut_sl'] == 'TTC', 'ut_intra_sl'] = 0
         
         parameter['orderside'] = parameter['orderside'].str.upper()
@@ -175,7 +175,7 @@ def get_parameter_data(code, parameter_path):
         parameter.loc[parameter['sl'] == 0, 'ut_sl'] = 0
         parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
         
-        parameter['ut_sl'] = parameter['ut_sl'].apply(lambda x: str(x).upper() if x == 'TTC' else float(str(x).upper()))
+        parameter['ut_sl'] = parameter['ut_sl'].astype(str).str.upper()
         parameter['orderside'] = parameter['orderside'].str.upper()
         parameter['method'] = parameter['method'].str.upper()
         
@@ -190,13 +190,48 @@ def get_parameter_data(code, parameter_path):
         parameter.loc[parameter['sl'] == 0, 'ut_sl'] = 0
         parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
         
-        parameter['ut_sl'] = parameter['ut_sl'].apply(lambda x: str(x).upper() if x == 'TTC' else str(x).upper())
+        parameter['ut_sl'] = parameter['ut_sl'].astype(str).str.upper()
         parameter['trade_interval'] = parameter['trade_interval'].str.upper()
         parameter['orderside'] = parameter['orderside'].str.upper()
         parameter['method'] = parameter['method'].str.upper()
         
         if code == 'B120_RE_SI_PSL':
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
+            
+    elif (code == 'B120G'):
+        
+        parameter = parameter[pd.to_datetime(parameter['exit_time'], format='%H:%M:%S').dt.time <= (pd.to_datetime(parameter['entry_time2'], format='%H:%M:%S')).dt.time]
+        parameter = parameter[pd.to_datetime(parameter['entry_time2'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time2'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
+        
+        # filter - where sl = 0
+        parameter.loc[parameter['sl'] == 0, 'ut_sl'] = 0
+        parameter.loc[parameter['sl2'] == 0, 'ut_sl2'] = 0
+        parameter.loc[(parameter['sl'] == 0) | (parameter['sl2'] == 0), 'method'] = 'HL'
+        
+        parameter['ut_sl'] = parameter['ut_sl'].astype(str).str.upper()
+        parameter['ut_sl2'] = parameter['ut_sl2'].astype(str).str.upper()
+        parameter['orderside'] = parameter['orderside'].str.upper()
+        parameter['method'] = parameter['method'].str.upper()
+        
+    elif (code == 'B120G_PSL'):
+        
+        # filter - entry < (exit_time|endtime - 5min)
+        parameter = parameter[pd.to_datetime(parameter['exit_time'], format='%H:%M:%S').dt.time <= (pd.to_datetime(parameter['entry_time2'], format='%H:%M:%S')).dt.time]
+        parameter = parameter[pd.to_datetime(parameter['entry_time2'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time2'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
+        
+        parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
+        parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
+        
+        # filter - where sl = 0
+        parameter.loc[parameter['sl'] == 0, 'ut_sl'] = 0
+        parameter.loc[parameter['sl2'] == 0, 'ut_sl2'] = 0
+        parameter.loc[(parameter['sl'] == 0) | (parameter['sl2'] == 0), 'method'] = 'HL'
+
+        parameter['ut_sl'] = parameter['ut_sl'].astype(str).str.upper()
+        parameter['ut_sl2'] = parameter['ut_sl2'].astype(str).str.upper()
+        parameter['trade_interval'] = parameter['trade_interval'].str.upper()
+        parameter['orderside'] = parameter['orderside'].str.upper()
+        parameter['method'] = parameter['method'].str.upper()
 
 
     elif (code == 'DT') or (code == 'DT_SI'):

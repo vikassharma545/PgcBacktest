@@ -1,5 +1,6 @@
 import sys
 import ctypes
+import datetime
 import argparse
 import itertools
 import pandas as pd
@@ -224,6 +225,18 @@ def get_parameter_data(code, parameter_path):
         
         parameter = parameter[pd.to_datetime(parameter['entry_time2'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['last_trade_time2'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
         parameter = parameter[pd.to_datetime(parameter['last_trade_time2'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time2'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
+        
+        def check_B120G_PSL(row):
+            today = datetime.datetime.today()
+            start_dt = datetime.datetime.combine(today, row['entry_time'])
+            start_dt2 = datetime.datetime.combine(today, row['entry_time2'])
+            last_trade_dt = datetime.datetime.combine(today, row['last_trade_time'])
+            last_trade_dt2 = datetime.datetime.combine(today, row['last_trade_time2'])
+            time_range = pd.date_range(start_dt, last_trade_dt, freq=row['trade_interval'].lower())
+            time_range2 = pd.date_range(start_dt2, last_trade_dt2, freq=row['trade_interval2'].lower())
+            return len(time_range) == len(time_range2)
+
+        parameter = parameter[parameter.apply(lambda x : check_B120G_PSL(x), axis=1)]
         
         # filter - where sl = 0
         parameter.loc[parameter['sl'] == 0, 'ut_sl'] = 0

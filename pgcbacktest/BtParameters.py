@@ -222,6 +222,9 @@ def get_parameter_data(code, parameter_path):
         parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
         parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
         
+        parameter = parameter[pd.to_datetime(parameter['entry_time2'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['last_trade_time2'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
+        parameter = parameter[pd.to_datetime(parameter['last_trade_time2'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time2'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
+        
         # filter - where sl = 0
         parameter.loc[parameter['sl'] == 0, 'ut_sl'] = 0
         parameter.loc[parameter['sl2'] == 0, 'ut_sl2'] = 0
@@ -230,6 +233,7 @@ def get_parameter_data(code, parameter_path):
         parameter['ut_sl'] = parameter['ut_sl'].astype(str).str.upper()
         parameter['ut_sl2'] = parameter['ut_sl2'].astype(str).str.upper()
         parameter['trade_interval'] = parameter['trade_interval'].str.upper()
+        parameter['trade_interval2'] = parameter['trade_interval2'].str.upper()
         parameter['orderside'] = parameter['orderside'].str.upper()
         parameter['method'] = parameter['method'].str.upper()
 

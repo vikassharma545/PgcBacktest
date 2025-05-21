@@ -480,6 +480,24 @@ def get_parameter_data(code, parameter_path):
         if code == 'SUT_SI_PSL':
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
         
+    elif (code == 'SUT_TT_PSL'):
+        
+        parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
+        parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
+        
+        #filer intra sl
+        parameter['intra_sl'] = parameter.apply(lambda row: row['sl'] + float(row['intra_sl'].split('+')[-1]) if '+' in str(row['intra_sl']) else float(row['intra_sl']), axis=1)
+        parameter = parameter[~((parameter['intra_sl'] != 0) & (parameter['intra_sl'] < parameter['sl']))]
+
+        # filter - where sl = 0 & intra_sl = 0
+        parameter.loc[(parameter['sl'] == 0) & (parameter['intra_sl'] == 0), 'ut_sl'] = 0
+
+        parameter['trade_interval'] = parameter['trade_interval'].str.upper()
+        parameter['orderside'] = parameter['orderside'].str.upper()
+        parameter['ut_orderside'] = parameter['ut_orderside'].str.upper()
+        parameter['ut_method'] = parameter['ut_method'].str.upper()
+        parameter['tt_orderside'] = parameter['tt_orderside'].str.upper()
+        parameter['tt_method'] = parameter['tt_method'].str.upper()
         
     elif code == 'SUT_SRE':
         #filer intra sl

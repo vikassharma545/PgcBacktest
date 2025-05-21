@@ -435,8 +435,26 @@ def get_parameter_data(code, parameter_path):
         parameter.loc[(parameter['sl'] == 0) & (parameter['intra_sl'] == 0), 'ut_sl'] = 0
 
         parameter['orderside'] = parameter['orderside'].str.upper()
-        parameter['ut_orderside'] = parameter['orderside'].str.upper()
+        parameter['ut_orderside'] = parameter['ut_orderside'].str.upper()
         parameter['ut_method'] = parameter['ut_method'].str.upper()
+        
+        if code == 'SUT_SI':
+            parameter['std_indicator'] = parameter['std_indicator'].str.upper()
+            
+    elif (code == 'SUT_TT'):
+
+        #filer intra sl
+        parameter['intra_sl'] = parameter.apply(lambda row: row['sl'] + float(row['intra_sl'].split('+')[-1]) if '+' in str(row['intra_sl']) else float(row['intra_sl']), axis=1)
+        parameter = parameter[~((parameter['intra_sl'] != 0) & (parameter['intra_sl'] < parameter['sl']))]
+
+        # filter - where sl = 0 & intra_sl = 0
+        parameter.loc[(parameter['sl'] == 0) & (parameter['intra_sl'] == 0), 'ut_sl'] = 0
+
+        parameter['orderside'] = parameter['orderside'].str.upper()
+        parameter['ut_orderside'] = parameter['ut_orderside'].str.upper()
+        parameter['ut_method'] = parameter['ut_method'].str.upper()
+        parameter['tt_orderside'] = parameter['tt_orderside'].str.upper()
+        parameter['tt_method'] = parameter['ut_method'].str.upper()
         
         if code == 'SUT_SI':
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
@@ -456,7 +474,7 @@ def get_parameter_data(code, parameter_path):
 
         parameter['trade_interval'] = parameter['trade_interval'].str.upper()
         parameter['orderside'] = parameter['orderside'].str.upper()
-        parameter['ut_orderside'] = parameter['orderside'].str.upper()
+        parameter['ut_orderside'] = parameter['ut_orderside'].str.upper()
         parameter['ut_method'] = parameter['ut_method'].str.upper()
         
         if code == 'SUT_SI_PSL':
@@ -477,7 +495,7 @@ def get_parameter_data(code, parameter_path):
         parameter.loc[parameter['ut_sl'] == 0, 'sre_intra_sl'] = 0
 
         parameter['orderside'] = parameter['orderside'].str.upper()
-        parameter['ut_orderside'] = parameter['orderside'].str.upper()
+        parameter['ut_orderside'] = parameter['ut_orderside'].str.upper()
         parameter['ut_method'] = parameter['ut_method'].str.upper()
         
     
@@ -491,10 +509,10 @@ def get_parameter_data(code, parameter_path):
         parameter.loc[(parameter['sl'] == 0) & (parameter['intra_sl'] == 0), 'ut_sl'] = 0
 
         parameter['orderside'] = parameter['orderside'].str.upper()
-        parameter['ut_orderside'] = parameter['orderside'].str.upper()
+        parameter['ut_orderside'] = parameter['ut_orderside'].str.upper()
         parameter['ut_method'] = parameter['ut_method'].str.upper()
 
-        
+
     elif code == 'IRONFLY':
         parameter = parameter[parameter['sl'] != 0]
         

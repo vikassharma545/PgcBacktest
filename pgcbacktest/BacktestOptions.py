@@ -25,6 +25,9 @@ def set_pm_time_index(data, time_index):
 
 cv = lambda x: str(float(x)) if isinstance(x, (int, float)) or (isinstance(x, str) and x.replace('.', '', 1).isdigit()) else x
 
+def cal_percent(price, percent):
+    return price * percent/100
+
 chunk_size = 100000
 def is_file_exists(output_csv_path, file_name, parameter_size):
     return all([os.path.exists(f"{output_csv_path}{file_name} No-{idx}.parquet") for idx, i in enumerate(range(0, parameter_size, chunk_size), start=1)])

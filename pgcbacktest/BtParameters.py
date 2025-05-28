@@ -251,7 +251,7 @@ def get_parameter_data(code, parameter_path):
         parameter['method'] = parameter['method'].str.upper()
 
 
-    elif (code == 'DT') or (code == 'DT_SI'):
+    elif (code == 'DT') or (code == 'DT_SI') or (code == 'DT_RE'):
         # filter - where sl = 0
         parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
         
@@ -275,7 +275,7 @@ def get_parameter_data(code, parameter_path):
         
         if code == 'DT_SI_PSL':
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
-        
+
             
     elif (code == 'NRE') or (code == 'NREW') or (code == 'NRE_SI') or (code == 'NRE_CC'):
         # filter - where sl = 0

@@ -396,7 +396,11 @@ def get_parameter_data(code, parameter_path):
         
         if code == 'SRE_SI':
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
+            
 
+    elif (code == 'SRE_PREMIUM_SHIFT'):
+        pass
+    
 
     elif code == 'SREW_RANGE':
 

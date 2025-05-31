@@ -215,22 +215,56 @@ class IntradayBacktest:
                 start_dt += datetime.timedelta(minutes = 1)
                 
         return None, None, None, None, None, None
+    
+    def get_ut_strike(self, start_dt, end_dt, om=None, target=None):
+        while start_dt < end_dt:
+            try:
+                future_price = self.future_data.loc[start_dt,'close']
+                step = self.STEPS[self.index.lower()]
+                target = ((int(future_price/step)*step)/100*om) if target is None else target
+                target_od = self.options[(self.options['date_time'] == start_dt) & (self.options['close'] >= target)].sort_values(by=['close']).copy()
+                
+                ce_scrip = target_od.loc[target_od['scrip'].str.endswith('CE'), 'scrip'].iloc[0]
+                pe_scrip = target_od.loc[target_od['scrip'].str.endswith('PE'), 'scrip'].iloc[0]
+                
+                ce_price, pe_price = self.options_data.loc[(start_dt, ce_scrip),'close'], self.options_data.loc[(start_dt, pe_scrip),'close']
+
+                return ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt
+            except (IndexError, KeyError, ValueError, TypeError):
+                start_dt += datetime.timedelta(minutes = 1)
+            except Exception as e:
+                print('get_straddle_strike', e)
+                traceback.print_exc()
+                start_dt += datetime.timedelta(minutes = 1)
+
+        return None, None, None, None, None, None
 
     @lru_cache(maxsize=None)
-    def get_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1, only=None):
+    def get_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1, only=None, obove_target_only=False):
         
-        if 'SD' in str(om).upper():
-            sd = float(om.upper().replace(' ', '').replace('SD', ''))
-            om = None
-        else:
-            sd = 0
-            om = float(om) if om else om
-
-        if (om is None or om <= 0) and target is None:
-            ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_straddle_strike(start_dt, end_dt, sd=sd)
-        else:
-            ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_strangle_strike(start_dt, end_dt, om=om, target=target, check_inverted=check_inverted, tf=tf)
+        if '%' in str(om) or obove_target_only:
             
+            if '%' in str(om):
+                om_precent = float(om.replace('%', ''))
+                future_price = self.future_data['close'].iloc[0]
+                step = self.STEPS[self.index.lower()]
+                one_om =  ((int(future_price/step)*step)/100)
+                target = one_om*om_precent/100
+
+            ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_ut_strike(start_dt, end_dt, om=om, target=target)  
+        else:
+            if 'SD' in str(om).upper():
+                sd = float(om.upper().replace(' ', '').replace('SD', ''))
+                om = None
+            else:
+                sd = 0
+                om = float(om) if om else om
+
+            if (om is None or om <= 0) and target is None:
+                ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_straddle_strike(start_dt, end_dt, sd=sd)
+            else:
+                ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_strangle_strike(start_dt, end_dt, om=om, target=target, check_inverted=check_inverted, tf=tf)
+                
         if only is None:
             return ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt
         else:
@@ -238,6 +272,107 @@ class IntradayBacktest:
                 return ce_scrip, ce_price, future_price, start_dt
             elif only == "PE":
                 return pe_scrip, pe_price, future_price, start_dt
+            
+    def sl_check_by_given_data(self, scrip_df, o=None, sl=0, intra_sl=0, sl_price=None, target_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False):
+        sl_flag, intra_sl_flag, target_flag, exit_time, pnl = False, False, False, '', 0
+
+        try:
+            if scrip_df.empty: raise DataEmptyError
+
+            o = scrip_df['close'].iloc[0] if o is None else o
+            slipage = self.Cal_slipage(o) if pl_with_slipage else 0
+
+            if from_next_minute: scrip_df = scrip_df.iloc[1:]
+            if scrip_df.empty: raise DataEmptyError
+
+            h, l, c = scrip_df['high'].max(), scrip_df['low'].min(), scrip_df['close'].iloc[-1]
+
+            if orderside == 'SELL':
+                sl_price_val = (((100 + sl) / 100) * o if sl_price is None else sl_price) if (sl or sl_price) else (h + 1)
+                intra_sl_price = ((100 + intra_sl) / 100) * o if intra_sl else (h + 1)
+                target_price = target_price if target_price is not None else (l - 1)
+
+                mask_intra_sl = scrip_df['high'] >= intra_sl_price
+                mask_sl = (scrip_df['close'] if from_candle_close else scrip_df['high']) >= sl_price_val
+                mask_target = scrip_df['low'] <= target_price
+
+            elif orderside == 'BUY':
+                sl_price_val = (((100 - sl) / 100) * o if sl_price is None else sl_price) if (sl or sl_price) else (l - 1)
+                intra_sl_price = ((100 - intra_sl) / 100) * o if intra_sl else (l - 1)
+                target_price = target_price if target_price is not None else (h + 1)
+
+                mask_intra_sl = scrip_df['low'] <= intra_sl_price
+                mask_sl = (scrip_df['close'] if from_candle_close else scrip_df['low']) <= sl_price_val
+                mask_target = scrip_df['high'] >= target_price
+
+            combined_mask = mask_intra_sl | mask_sl | mask_target
+
+            if combined_mask.any():
+                exit_row = scrip_df.loc[combined_mask.idxmax()]
+                exit_time = exit_row['date_time']
+
+                if orderside == 'SELL':
+                    if exit_row['high'] >= intra_sl_price:
+                        sl_flag, intra_sl_flag = True, True
+                        exit_price = intra_sl_price
+                    elif (exit_row['close'] if from_candle_close else exit_row['high']) >= sl_price_val:
+                        sl_flag = True
+                        exit_price = exit_row['close'] if from_candle_close else sl_price_val 
+                    elif exit_row['low'] <= target_price:
+                        target_flag = True
+                        exit_price = target_price
+                elif orderside == 'BUY':
+                    if exit_row['low'] <= intra_sl_price:
+                        sl_flag, intra_sl_flag = True, True
+                        exit_price = intra_sl_price
+                    elif (exit_row['close'] if from_candle_close else exit_row['low']) <= sl_price_val:
+                        sl_flag = True
+                        exit_price = exit_row['close'] if from_candle_close else sl_price_val
+                    elif exit_row['high'] >= target_price:
+                        target_flag = True
+                        exit_price = target_price
+            else:
+                exit_price = c
+
+            pnl = (exit_price - o) if orderside == 'BUY' else (o - exit_price)
+            pnl = round(pnl - slipage, 2)
+
+            if per_minute_mtm:
+                
+                scrip_df.set_index('date_time', inplace=True)
+                if exit_time:
+                    scrip_df = scrip_df.loc[scrip_df.index <= exit_time]
+
+                per_minute_mtm_series = o - scrip_df['close'] if orderside == 'SELL' else scrip_df['close'] - o
+                per_minute_mtm_series = per_minute_mtm_series - slipage
+                per_minute_mtm_series.iloc[-1] = pnl
+
+        except DataEmptyError:
+            sl_flag, intra_sl_flag, target_flag, exit_time, pnl = False, False, False, '', 0
+            o, h, l, c = '', '', '', ''
+            per_minute_mtm_series = pd.Series()
+            sl_price_val = ''
+        except Exception as e:
+            print('sl_check_single_leg', e)
+            traceback.print_exc()
+            sl_flag, intra_sl_flag, target_flag, exit_time, pnl = False, False, False, '', 0
+            o, h, l, c = '', '', '', ''
+            per_minute_mtm_series = pd.Series()
+            sl_price_val = ''
+
+        sl_price = sl_price_val if (sl or sl_price) else ''
+
+        if with_ohlc:
+            ohlc_data = (o, h, l, c, sl_price)
+            if per_minute_mtm:
+                return (*ohlc_data, exit_time, per_minute_mtm_series)
+            else:
+                return (*ohlc_data, sl_flag, intra_sl_flag, target_flag, exit_time, pnl)
+        else:
+            if per_minute_mtm:
+                return (exit_time, per_minute_mtm_series)
+            else:
+                return (sl_price, sl_flag, intra_sl_flag, target_flag, exit_time, pnl)
 
     @lru_cache(maxsize=None)
     def sl_check_single_leg(self, start_dt, end_dt, scrip, o=None, sl=0, intra_sl=0, sl_price=None, target_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False):

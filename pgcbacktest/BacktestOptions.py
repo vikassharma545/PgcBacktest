@@ -109,13 +109,18 @@ class IntradayBacktest:
             return straddle_data
 
     def get_single_leg_data_no_backup(self, start_dt, end_dt, scrip):
-        data = self.options[(self.options.scrip == scrip) & (self.options['date_time'] >= start_dt) & (self.options['date_time'] <= end_dt)].copy()
+        
+        t_start_dt = datetime.datetime.combine(self.current_date, datetime.time(9,15))
+        t_end_dt = datetime.datetime.combine(self.current_date, datetime.time(15,30))
+        
+        data = self.get_single_leg_data(t_start_dt, t_end_dt, scrip)
+        data = data[(data['date_time'] >= start_dt) & (data['date_time'] <= end_dt)].copy()
         return data.reset_index(drop=True)
     
     def get_straddle_data_no_backup(self, start_dt, end_dt, ce_scrip, pe_scrip, seperate=False):
 
-        ce_data = self.get_single_leg_data(start_dt, end_dt, ce_scrip).copy()
-        pe_data = self.get_single_leg_data(start_dt, end_dt, pe_scrip).copy()
+        ce_data = self.get_single_leg_data_no_backup(start_dt, end_dt, ce_scrip).copy()
+        pe_data = self.get_single_leg_data_no_backup(start_dt, end_dt, pe_scrip).copy()
         
         ce_data = ce_data[ce_data['date_time'].isin(pe_data['date_time'])]
         pe_data = pe_data[pe_data['date_time'].isin(ce_data['date_time'])]

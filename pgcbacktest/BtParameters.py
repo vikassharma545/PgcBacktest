@@ -398,9 +398,9 @@ def get_parameter_data(code, parameter_path):
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
             
 
-    elif (code == 'SRE_PREMIUM_SHIFT'):
-        pass
-    
+    elif (code == 'SRE_PREMIUM_SHIFT') or (code == 'SRE_PREMIUM_SHIFT_PSL'):
+        
+        parameter['orderside'] = parameter['orderside'].str.upper()
 
     elif code == 'SREW_RANGE':
 

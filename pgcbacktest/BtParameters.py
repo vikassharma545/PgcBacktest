@@ -262,7 +262,7 @@ def get_parameter_data(code, parameter_path):
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
             
         
-    elif (code == 'DT_PSL') or (code == 'DT_SI_PSL'):
+    elif (code == 'DT_PSL') or (code == 'DT_SI_PSL') or (code == 'DT_RE_PSL'):
         parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
         parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
         

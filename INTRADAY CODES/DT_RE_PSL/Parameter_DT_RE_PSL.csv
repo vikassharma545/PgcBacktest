@@ -1,0 +1,2 @@
+entry_time,exit_time,last_trade_time,trade_interval,orderside,method,decay,sl,om,decay_re
+09:20:00,15:25:00,11:00:00,1min,sell,HL,10,30,0,70

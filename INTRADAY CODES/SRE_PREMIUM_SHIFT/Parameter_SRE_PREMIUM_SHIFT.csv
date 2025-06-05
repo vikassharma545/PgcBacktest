@@ -1,3 +1,6 @@
 entry_time,exit_time,orderside,method,om,movement
 09:15:00,15:28:00,sell,CC,2.50%,60
-,,,HL,,100
+,,,HL,3.50%,70
+,,,,5%,80
+,,,,8.50%,90
+,,,,,100

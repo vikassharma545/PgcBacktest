@@ -1,16 +1,16 @@
-import os, sys, shutil, ctypes, psutil, datetime, requests, subprocess, socket
-import pandas as pd
-import numpy as np
-from time import sleep
+import os 
+import sys
+import math
+import ctypes
+import psutil
+import requests
 import nbformat
+import datetime
+import subprocess
+import numpy as np
+import pandas as pd
+from time import sleep
 from nbconvert import PythonExporter
-
-# --- System & Environment Info ---
-pc_name = f"{socket.gethostname()} {'Linux' if sys.platform == 'linux' else 'Windows'}"
-strategy_name = os.getcwd().replace('\\', '/').split('/')[-1]
-start_time = datetime.datetime.now()
-universal_msg = f"{pc_name}\nRunning Code: {strategy_name}"
-code_name = 'Run Code V8.py'
 
 # --- Telegram Bot Function ---
 def send_msg_telegram(msg):
@@ -18,6 +18,11 @@ def send_msg_telegram(msg):
         requests.get(f'https://api.telegram.org/bot5156026417:AAExQbrMAPrV0qI8tSYplFDjZltLBzXTm1w/sendMessage?chat_id=-607631145&text={msg}')
     except Exception as e:
         print(f"Telegram Error: {e}")
+
+def fun_timer(seconds):
+    for i in range(seconds, -1, -1):
+        print(f"🚀 {i} seconds 🚀", end="\r")
+        sleep(1)
 
 # --- User Menu Function ---
 def menu_driver(options, msg=''):
@@ -40,116 +45,247 @@ def menu_driver(options, msg=''):
             print("Enter a number.")
 
 # --- Notebook to Script Converter ---
-def convert_notebook_to_script(notebook_path, script_path):
+output_csv_path = ""
+def convert_notebook_to_script(notebook_path, script_path, temp_meta_data_path):
+    global output_csv_path
+    output_csv_path = ""
+    
     with open(notebook_path, 'r', encoding='utf-8') as nb_file:
         nb_content = nbformat.read(nb_file, as_version=4)
+        
+    if temp_meta_data_path:
+        for cell_idx, cell in enumerate(nb_content['cells']):
+            if (cell['cell_type'] == 'code') and ("meta_data_path" in cell['source']):
+                source = cell['source'].splitlines()
+                for idx, value in enumerate(source):
+                    if "meta_data_path =" in value:
+                        source[idx] = f"meta_data_path = f'{temp_meta_data_path}'"
+                    if ("output_csv_path =" in value):
+                        output_csv_path = source[idx]
+                nb_content['cells'][cell_idx]['source'] = '\n'.join(source)
+        
     script, _ = PythonExporter().from_notebook_node(nb_content)
     with open(script_path, 'w', encoding='utf-8') as py_file:
         py_file.write(script)
 
 # --- Platform-specific paths ---
-cache_path = "/home/pranjali/.temp" if sys.platform == 'linux' else "C:/.temp"
+cache_path = "C:/.temp"
 strategy_cache_path = f"{cache_path}/{{strategy}}"
 os.makedirs(cache_path, exist_ok=True)
 
 # --- File Detection ---
 all_files = os.listdir()
 jupyter_files = [f for f in all_files if f.endswith('.ipynb')]
-csv_files = [f for f in all_files if f.endswith('.csv') and 'metadata' in f.lower()]
+parameter_csv_files = [f for f in all_files if f.endswith('.csv') and 'metadata' not in f.lower() and "parameter" in f.lower()]
+meta_data_csv_files = [f for f in all_files if f.endswith('.csv') and 'metadata' in f.lower()]
 
 # --- Menu Selection ---
 jupyter_code = menu_driver(jupyter_files, 'Choose Jupyter Code')
-parameter_csv = menu_driver(csv_files, 'Choose Parameter CSV')
+parameter_csv = menu_driver(parameter_csv_files, 'Choose Parameter CSV')
+parameter_meta_data = menu_driver(meta_data_csv_files, 'Choose Parameter CSV')
+no_of_terminal_allowed = int(input("Number of Terminal Allowed: "))
+parameter_meta_data_for_run = parameter_meta_data if no_of_terminal_allowed == -1 else f"{cache_path}/{parameter_meta_data}"
+
 code_base = jupyter_code.replace('.ipynb', '').title()
 
 # --- Convert and Prepare ---
 script_output = strategy_cache_path.format(strategy=code_base) + ".py"
-convert_notebook_to_script(jupyter_code, script_output)
-print(f'\n#### RUN CODE ####\nCode: {jupyter_code}\nParameter: {parameter_csv}\n##################')
+convert_notebook_to_script(jupyter_code, script_output, parameter_meta_data_for_run)
+code_details = f'\n#### RUN CODE ####\nCode: {jupyter_code}\nParameter: {parameter_csv} \nMetaData Parameter: {parameter_meta_data} \n##################'
+print(code_details)
 
 # --- Python Path ---
-if sys.platform == 'linux':
-    python_path = '/usr/bin/python3'
-else:
-    python_path = [p for p in sys.path if p.endswith("\\Lib\\site-packages")][0].replace("\\Lib\\site-packages", "") + "\\python.exe"
-    python_path = python_path.replace("\\", "/")
-
-# --- Read CSV and Start Codes ---
-df = pd.read_csv(parameter_csv)
-for idx, row in df.iterrows():
-    if row.get('run', False):
-        print(f"Running Row {idx}: {code_base}")
-        if sys.platform == 'linux':
-            subprocess.Popen(["xfce4-terminal", "-e", f"{python_path} '{script_output}' -r {idx}"])
-        else:
-            subprocess.run(["start", python_path, script_output, "-r", str(idx)], shell=True)
-        sleep(2)
-
+python_path = [p for p in sys.path if p.endswith("\\Lib\\site-packages")][0].replace("\\Lib\\site-packages", "") + "\\python.exe"
+python_path = python_path.replace("\\", "/")
+    
 # --- Check Duplicate Code Execution ---
-def check_duplicate_runs(target_name):
+def check_duplicate_runs():
     count = 0
     for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
         try:
             if 'python' in proc.info['name'].lower():
                 for arg in proc.info.get('cmdline', []):
-                    if arg.endswith('.py') and os.path.basename(arg) == target_name:
-                        count += 1
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            continue
+                    if os.path.normpath(arg) == os.path.normpath(sys.argv[0]):
+                        count+=1
+        except:
+            pass
     return count
 
-if check_duplicate_runs(code_name) > 1:
+if check_duplicate_runs() > 1:
+    print("\nRun Code Already Running for this Code :)")
+    sleep(5)
     sys.exit()
 
+from pgcbacktest.BtParameters import *
+from pgcbacktest.BacktestOptions import *
+pickle_path = 'C:/PICKLE/'
+parameter_code = parameter_csv.split('_', maxsplit=1)[-1].split('.')[0]
+_, parameter_len = get_parameter_data(parameter_code, parameter_csv)
+meta_data, _ = get_meta_data(parameter_code, parameter_meta_data)
+no_of_chunk = math.ceil(parameter_len/chunk_size)
+
+output_csv_path = output_csv_path.split("f'{code}")[-1].split('\\')[0]
+output_csv_path = f"{parameter_code}{output_csv_path}/"
+
+index_dates = {}
+index_dte_dates = {}
+total_dates, total_pending_dates = 0, 0
+for row_idx in range(len(meta_data)):
+    if meta_data.loc[row_idx, 'run']:
+        meta_row = meta_data.iloc[row_idx]
+        index, dte, _, _, _, _, date_lists = get_meta_row_data(meta_row, pickle_path)
+        total_dates += len(date_lists)
+        index_dates[index] = index_dates.get(index, 0) + len(date_lists)
+        files_dates = [current_date.date() for current_date in date_lists if not is_file_exists(output_csv_path, f"{index} {current_date.date()} {parameter_code}", parameter_len)]
+
+        if files_dates:
+            total_pending_dates += len(files_dates)
+            index_dte_dates[(index, dte)] = sorted(index_dte_dates.get((index, dte), []) + files_dates)
+
+file_details = f'\n####### OUTPUT FILES #######\nNo of Chunks: {no_of_chunk} \nTotals Dates: {total_dates} \nTotal Files Created: {no_of_chunk*total_dates}\nDates IndexWise: {index_dates} \n############################'
+print(file_details)
+
+print('MetaData Creating...')
+if no_of_terminal_allowed > 0:
+    sorted_keys = sorted(index_dte_dates.keys(), key=lambda k: len(index_dte_dates[k]), reverse=True)
+
+    while len(sorted_keys) != no_of_terminal_allowed:
+        if len(sorted_keys) < no_of_terminal_allowed:
+            keys_to_split = sorted_keys[:(no_of_terminal_allowed - len(sorted_keys))]
+
+            splited = True
+            for key in index_dte_dates:
+                if key in keys_to_split and len(index_dte_dates[key]) > 1:
+                    splited = False
+                    value = index_dte_dates[key]
+                    mid = (len(value) + 1) // 2
+                    first_half = value[:mid]
+                    second_half = value[mid:]
+
+                    a_key = ('a',) + key
+                    b_key = ('b',) + key
+                    index_dte_dates[a_key] = first_half
+                    index_dte_dates[b_key] = second_half
+                    del index_dte_dates[key]
+                    break
+
+            if splited:
+                break
+
+            sorted_keys = sorted(index_dte_dates.keys(), key=lambda k: len(index_dte_dates[k]), reverse=True)
+
+        else:
+            sorted_keys = sorted_keys[:no_of_terminal_allowed]
+            index_dte_dates = {key: value for key, value in index_dte_dates.items() if key in sorted_keys}
+
+    temp_meta_data = pd.DataFrame(columns=meta_data.columns)
+    for key, value in index_dte_dates.items():
+        temp_meta_data.loc[len(temp_meta_data)] = [key[-2], key[-1], value[0].strftime("%d-%m-%Y"), value[-1].strftime("%d-%m-%Y"), datetime.time(9,15), datetime.time(15,29), True]
+    temp_meta_data.to_csv(parameter_meta_data_for_run, index=False)
+else:
+    meta_data.to_csv(parameter_meta_data_for_run, index=False)
+print('MetaData Created')
+
+print('\nRunning Code...\n')
+# --- Read CSV and Start Codes ---
+df = pd.read_csv(parameter_meta_data_for_run)
+for idx, row in df.iterrows():
+    if row.get('run', False):
+        print(f"Running Row {idx}: {code_base}")
+        subprocess.run(["start", python_path, script_output, "-r", str(idx)], shell=True)
+        sleep(2)
+
 # --- Monitoring Memory and CPU ---
-terminal_title = 'Code Monitor: Auto Restart on High RAM'
-try:
-    if sys.platform == 'linux':
-        sys.stdout.write(f"\033]0;{terminal_title}\007")
-    else:
-        ctypes.windll.kernel32.SetConsoleTitleW(terminal_title)
-except Exception:
-    pass
+terminal_title = f'{code_base} : Code Monitor: Auto Restart on High RAM'
+ctypes.windll.kernel32.SetConsoleTitleW(terminal_title)
 
 while True:
     try:
         mem_usage = psutil.virtual_memory().percent
         cpu_usage = psutil.cpu_percent()
-        current_time = datetime.datetime.now()
-        msg = f"{universal_msg}\n🧠 RAM Used: {mem_usage}%\n🖥 CPU Used: {cpu_usage}%"
-
-        # Periodic Telegram update
-        if current_time > start_time + datetime.timedelta(minutes=30):
-            send_msg_telegram(msg)
-            start_time = current_time
+        msg = f"{code_details}\n{file_details}\n\n🧠 RAM Used: {mem_usage}%\n🖥 CPU Used: {cpu_usage}%"
 
         # High memory condition
-        if mem_usage > 90:
-            print(f"High RAM: {mem_usage}% at {datetime.datetime.now()}")
+        if mem_usage > 87:
+            print(f"\nHigh RAM: {mem_usage}% at {datetime.datetime.now()}\n")
+            
             for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
                 try:
                     if 'python' in proc.info['name'].lower():
                         for arg in proc.info.get('cmdline', []):
-                            if arg.endswith('.py') and os.path.basename(arg) not in [code_name, 'Code Close And Run.py']:
-                                print(f"Terminating: {arg}")
+                            if script_output in arg:
                                 psutil.Process(proc.info['pid']).terminate()
-                                sleep(3)
+                                print(f"Killed - {arg}")
+                                sleep(2)
+                                break
+                                
                 except Exception as e:
                     print(f"Error stopping process: {e}")
 
-            send_msg_telegram(
-                f'{universal_msg}\n🧠 RAM Used: {mem_usage}%\n🖥 CPU Used: {cpu_usage}%\n⚠️ RAM > 90%.\n🛑 All processes stopped.\n✅ Restarting.'
-            )
+            print('MetaData Creating...')
+            index_dte_dates = {}
+            total_pending_dates = 0
+            for row_idx in range(len(meta_data)):
+                if meta_data.loc[row_idx, 'run']:
+                    meta_row = meta_data.iloc[row_idx]
+                    index, dte, _, _, _, _, date_lists = get_meta_row_data(meta_row, pickle_path)
+                    files_dates = [current_date.date() for current_date in date_lists if not is_file_exists(output_csv_path, f"{index} {current_date.date()} {parameter_code}", parameter_len)]
+
+                    if files_dates:
+                        total_pending_dates += len(files_dates)
+                        index_dte_dates[(index, dte)] = sorted(index_dte_dates.get((index, dte), []) + files_dates)
+    
+            if no_of_terminal_allowed > 0:
+        
+                sorted_keys = sorted(index_dte_dates.keys(), key=lambda k: len(index_dte_dates[k]), reverse=True)
+
+                while len(sorted_keys) != no_of_terminal_allowed:
+                    if len(sorted_keys) < no_of_terminal_allowed:
+                        keys_to_split = sorted_keys[:(no_of_terminal_allowed - len(sorted_keys))]
+
+                        splited = True
+                        for key in index_dte_dates:
+                            if key in keys_to_split and len(index_dte_dates[key]) > 1:
+                                splited = False
+                                value = index_dte_dates[key]
+                                mid = (len(value) + 1) // 2
+                                first_half = value[:mid]
+                                second_half = value[mid:]
+
+                                a_key = ('a',) + key
+                                b_key = ('b',) + key
+                                index_dte_dates[a_key] = first_half
+                                index_dte_dates[b_key] = second_half
+                                del index_dte_dates[key]
+                                break
+
+                        if splited:
+                            break
+
+                        sorted_keys = sorted(index_dte_dates.keys(), key=lambda k: len(index_dte_dates[k]), reverse=True)
+                    else:
+                        sorted_keys = sorted_keys[:no_of_terminal_allowed]
+                        index_dte_dates = {key: value for key, value in index_dte_dates.items() if key in sorted_keys}
+
+                temp_meta_data = pd.DataFrame(columns=meta_data.columns)
+                for key, value in index_dte_dates.items():
+                    temp_meta_data.loc[len(temp_meta_data)] = [key[-2], key[-1], value[0].strftime("%d-%m-%Y"), value[-1].strftime("%d-%m-%Y"), datetime.time(9,15), datetime.time(15,29), True]
+                temp_meta_data.to_csv(parameter_meta_data_for_run, index=False)
+            else:
+                meta_data.to_csv(parameter_meta_data_for_run, index=False)
+                
+            print('MetaData Created')
 
             # Restart the script
-            sleep(25)
-            if sys.platform == 'linux':
-                subprocess.Popen(["xfce4-terminal", "-e", f"bash -c 'cd \"{os.getcwd()}\" && python3 \"{code_name}\"; exit'"])
-            else:
-                path = os.getcwd().replace("\\", "/")
-                subprocess.run(f'start python "{path}/{code_name}"', shell=True)
-            break
-
+            print('\nCode is About to Restart in ...')
+            fun_timer(100)
+            # --- Read CSV and Start Codes ---
+            df = pd.read_csv(parameter_meta_data_for_run)
+            for idx, row in df.iterrows():
+                if row.get('run', False):
+                    print(f"Running Row {idx}: {code_base}")
+                    subprocess.run(["start", python_path, script_output, "-r", str(idx)], shell=True)
+                    sleep(2)
         else:
             os.system('cls' if os.name == 'nt' else 'clear')
             print(msg, end='\r')
@@ -157,6 +293,5 @@ while True:
 
     except Exception as e:
         err_msg = f"Error in monitoring loop: {e}"
-        send_msg_telegram(err_msg)
         print(err_msg)
         input("Press Enter to continue...")

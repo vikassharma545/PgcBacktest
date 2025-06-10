@@ -198,6 +198,7 @@ for idx, row in df.iterrows():
 # --- Monitoring Memory and CPU ---
 terminal_title = f'{code_base} : Code Monitor: Auto Restart on High RAM'
 ctypes.windll.kernel32.SetConsoleTitleW(terminal_title)
+check_time = datetime.datetime.now()
 
 while True:
     try:
@@ -205,16 +206,20 @@ while True:
         cpu_usage = psutil.cpu_percent()
         msg = f"{code_details}\n{file_details}\n\n🧠 RAM Used: {mem_usage}%\n🖥 CPU Used: {cpu_usage}%"
         
-        code_count = 0
-        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-            if 'python' in proc.info['name'].lower():
-                for arg in proc.info.get('cmdline', []):
-                    if script_output in arg:
-                        try:
-                            code_count += 1
-                            break
-                        except:
-                            pass
+        if (no_of_terminal_allowed != -1) and (check_time < datetime.datetime.now()):
+            
+            code_count = 0
+            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                if 'python' in proc.info['name'].lower():
+                    for arg in proc.info.get('cmdline', []):
+                        if script_output in arg:
+                            try:
+                                code_count += 1
+                                break
+                            except:
+                                pass
+
+            check_time += datetime.timedelta(minutes=10)
 
         # High memory condition
         if mem_usage > 90 or (no_of_terminal_allowed != -1 and code_count < math.floor(no_of_terminal_allowed*0.60)):

@@ -145,6 +145,11 @@ for row_idx in range(len(meta_data)):
 file_details = f'\n####### OUTPUT FILES #######\nNo of Chunks: {no_of_chunk} \nTotals Dates: {total_dates} \nTotal Files Created: {no_of_chunk*total_dates}\nDates IndexWise: {index_dates} \n############################'
 print(file_details)
 
+if total_pending_dates == 0:
+    print('\nNo Pending Dates Left all Dates files Complete :)')
+    sleep(5)
+    sys.exit()
+
 print('MetaData Creating...')
 if no_of_terminal_allowed > 0:
     sorted_keys = sorted(index_dte_dates.keys(), key=lambda k: len(index_dte_dates[k]), reverse=True)
@@ -206,6 +211,17 @@ while True:
         cpu_usage = psutil.cpu_percent()
         msg = f"{code_details}\n{file_details}\n\n🧠 RAM Used: {mem_usage}%\n🖥 CPU Used: {cpu_usage}%"
         
+        total_pending_dates = 0
+        for row_idx in range(len(meta_data)):
+            if meta_data.loc[row_idx, 'run']:
+                meta_row = meta_data.iloc[row_idx]
+                index, dte, _, _, _, _, date_lists = get_meta_row_data(meta_row, pickle_path)
+                files_dates = [current_date.date() for current_date in date_lists if not is_file_exists(output_csv_path, f"{index} {current_date.date()} {parameter_code}", parameter_len)]
+                total_pending_dates += len(files_dates)
+                
+        msg = f"{code_details}\n{file_details}\n\n🧠 RAM Used: {mem_usage}%\n🖥 CPU Used: {cpu_usage}% \nPending Dates: {total_pending_dates}"
+        
+        code_count = no_of_terminal_allowed
         if (no_of_terminal_allowed != -1) and (check_time < datetime.datetime.now()):
             
             code_count = 0
@@ -315,7 +331,7 @@ while True:
         else:
             os.system('cls' if os.name == 'nt' else 'clear')
             print(msg, end='\r')
-            sleep(3)
+            sleep(5)
 
     except Exception as e:
         err_msg = f"Error in monitoring loop: {e}"

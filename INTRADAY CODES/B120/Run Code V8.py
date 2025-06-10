@@ -204,23 +204,43 @@ while True:
         mem_usage = psutil.virtual_memory().percent
         cpu_usage = psutil.cpu_percent()
         msg = f"{code_details}\n{file_details}\n\n🧠 RAM Used: {mem_usage}%\n🖥 CPU Used: {cpu_usage}%"
+        
+        code_count = 0
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            if 'python' in proc.info['name'].lower():
+                for arg in proc.info.get('cmdline', []):
+                    if script_output in arg:
+                        try:
+                            code_count += 1
+                            break
+                        except:
+                            pass
 
         # High memory condition
-        if mem_usage > 87:
-            print(f"\nHigh RAM: {mem_usage}% at {datetime.datetime.now()}\n")
+        if mem_usage > 90 or (no_of_terminal_allowed != -1 and code_count < math.floor(no_of_terminal_allowed*0.60)):
+            
+            if  mem_usage > 90:
+                print(f"\nHigh RAM: {mem_usage}% at {datetime.datetime.now()}\n")
+            else:
+                print(f"\nNumber of Terminal Running - {code_count} << {no_of_terminal_allowed}")
             
             for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-                try:
-                    if 'python' in proc.info['name'].lower():
-                        for arg in proc.info.get('cmdline', []):
-                            if script_output in arg:
+                if 'python' in proc.info['name'].lower():
+                    for arg in proc.info.get('cmdline', []):
+                        if script_output in arg:
+                            try:
                                 psutil.Process(proc.info['pid']).terminate()
+                                sleep(0.5)
+                                psutil.Process(proc.info['pid']).terminate()
+                                sleep(0.5)
+                                psutil.Process(proc.info['pid']).terminate()
+                                sleep(0.5)
+                                psutil.Process(proc.info['pid']).terminate()
+                                sleep(0.5)
                                 print(f"Killed - {arg}")
-                                sleep(2)
                                 break
-                                
-                except Exception as e:
-                    print(f"Error stopping process: {e}")
+                            except:
+                                pass
 
             print('MetaData Creating...')
             index_dte_dates = {}
@@ -260,6 +280,7 @@ while True:
                                 break
 
                         if splited:
+                            no_of_terminal_allowed = -1
                             break
 
                         sorted_keys = sorted(index_dte_dates.keys(), key=lambda k: len(index_dte_dates[k]), reverse=True)

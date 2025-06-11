@@ -55,6 +55,16 @@ class IntradayBacktest:
         self.options = self.options[(self.options['date_time'].dt.time >= start_time) & (self.options['date_time'].dt.time <= end_time)]
         self.options_data = self.options.set_index(['date_time', 'scrip'])
         self.gap = self.get_gap()
+        
+        self.get_single_leg_data = lru_cache()(self._get_single_leg_data)
+        self.get_straddle_data = lru_cache()(self._get_straddle_data)
+        self.get_strike = lru_cache()(self._get_strike)
+        self.sl_check_single_leg = lru_cache()(self._sl_check_single_leg)
+        self.sl_check_combine_leg = lru_cache()(self._sl_check_combine_leg)
+        self.decay_check_single_leg = lru_cache()(self._decay_check_single_leg)
+        self.sl_check_single_leg_with_sl_trail = lru_cache()(self._sl_check_single_leg_with_sl_trail)
+        self.sl_check_combine_leg_with_sl_trail = lru_cache()(self._sl_check_combine_leg_with_sl_trail)
+        self.straddle_indicator = lru_cache()(self._straddle_indicator)
 
     def get_future_option_path(self, index):
         index = index.lower()
@@ -81,13 +91,11 @@ class IntradayBacktest:
         except Exception as e:
             print(e)
 
-    @lru_cache(maxsize=None)
-    def get_single_leg_data(self, start_dt, end_dt, scrip):
+    def _get_single_leg_data(self, start_dt, end_dt, scrip):
         data = self.options[(self.options.scrip == scrip) & (self.options['date_time'] >= start_dt) & (self.options['date_time'] <= end_dt)].copy()
         return data.reset_index(drop=True)
 
-    @lru_cache(maxsize=None)
-    def get_straddle_data(self, start_dt, end_dt, ce_scrip, pe_scrip, seperate=False):
+    def _get_straddle_data(self, start_dt, end_dt, ce_scrip, pe_scrip, seperate=False):
 
         ce_data = self.get_single_leg_data(start_dt, end_dt, ce_scrip).copy()
         pe_data = self.get_single_leg_data(start_dt, end_dt, pe_scrip).copy()
@@ -269,8 +277,7 @@ class IntradayBacktest:
 
         return None, None, None, None, None, None
 
-    @lru_cache(maxsize=None)
-    def get_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1, only=None, obove_target_only=False):
+    def _get_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1, only=None, obove_target_only=False):
         
         if '%' in str(om) or obove_target_only:
             
@@ -404,8 +411,7 @@ class IntradayBacktest:
             else:
                 return (sl_price, sl_flag, intra_sl_flag, target_flag, exit_time, pnl)
 
-    @lru_cache(maxsize=None)
-    def sl_check_single_leg(self, start_dt, end_dt, scrip, o=None, sl=0, intra_sl=0, sl_price=None, target_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False):
+    def _sl_check_single_leg(self, start_dt, end_dt, scrip, o=None, sl=0, intra_sl=0, sl_price=None, target_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False):
         sl_flag, intra_sl_flag, target_flag, exit_time, pnl = False, False, False, '', 0
 
         try:
@@ -507,8 +513,7 @@ class IntradayBacktest:
             else:
                 return (sl_price, sl_flag, intra_sl_flag, target_flag, exit_time, pnl)
 
-    @lru_cache(maxsize=None)
-    def sl_check_combine_leg(self, start_dt, end_dt, ce_scrip, pe_scrip, o=None, sl=0, intra_sl=0, sl_price=None, intra_sl_price=None, target_price=None, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False):
+    def _sl_check_combine_leg(self, start_dt, end_dt, ce_scrip, pe_scrip, o=None, sl=0, intra_sl=0, sl_price=None, intra_sl_price=None, target_price=None, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False):
         sl_flag, intra_sl_flag, target_flag, exit_time, pnl = False, False, False, '', 0
 
         try:
@@ -611,8 +616,7 @@ class IntradayBacktest:
             else:
                 return (sl_price, intra_sl_price, sl_flag, intra_sl_flag, target_flag, exit_time, pnl)
 
-    @lru_cache(maxsize=None)
-    def decay_check_single_leg(self, start_dt, end_dt, scrip, decay=None, decay_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False):
+    def _decay_check_single_leg(self, start_dt, end_dt, scrip, decay=None, decay_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False):
         
         decay_flag, decay_time = False, ''
         
@@ -653,8 +657,7 @@ class IntradayBacktest:
         else:
             return decay_price, decay_flag, decay_time
         
-    @lru_cache(maxsize=None)
-    def sl_check_single_leg_with_sl_trail(self, start_dt, end_dt, scrip, trail, sl_trail, o=None, sl=0, sl_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False):
+    def _sl_check_single_leg_with_sl_trail(self, start_dt, end_dt, scrip, trail, sl_trail, o=None, sl=0, sl_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False):
         sl_flag, trail_flag, exit_time, pnl = False, False, '', 0
 
         try:
@@ -761,8 +764,7 @@ class IntradayBacktest:
             else:
                 return (sl_price, sl_flag, trail_flag, exit_time, pnl)
 
-    @lru_cache(maxsize=None)
-    def sl_check_combine_leg_with_sl_trail(self, start_dt, end_dt, ce_scrip, pe_scrip, trail, sl_trail, o=None, sl=0, intra_sl=0, sl_price=None, intra_sl_price=None, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False):
+    def _sl_check_combine_leg_with_sl_trail(self, start_dt, end_dt, ce_scrip, pe_scrip, trail, sl_trail, o=None, sl=0, intra_sl=0, sl_price=None, intra_sl_price=None, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False):
         sl_flag, intra_sl_flag, trail_flag, exit_time, pnl = False, False, False, '', 0
 
         try:
@@ -885,8 +887,7 @@ class IntradayBacktest:
             else:
                 return (sl_price, intra_sl_price, sl_flag, intra_sl_flag, trail_flag, exit_time, pnl)
 
-    @lru_cache(maxsize=None)
-    def straddle_indicator(self, start_dt, end_dt, si_indicator, si_buffer, buffer_min):
+    def _straddle_indicator(self, start_dt, end_dt, si_indicator, si_buffer, buffer_min):
 
         buffer_start = max(datetime.datetime.combine(start_dt.date(), datetime.time(9, 15)), start_dt - datetime.timedelta(minutes=buffer_min))
         buffer_range = pd.date_range(buffer_start, start_dt - datetime.timedelta(minutes=1), freq='1min')
@@ -913,6 +914,9 @@ class IntradayBacktest:
                     return True, entry_time
 
         return False, ''
+    
+    def __del__(self) -> None:
+        print("Deleting instance ...", self.current_date)
 
 
 class WeeklyBacktest(IntradayBacktest):

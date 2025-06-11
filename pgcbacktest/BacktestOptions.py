@@ -56,15 +56,15 @@ class IntradayBacktest:
         self.options_data = self.options.set_index(['date_time', 'scrip'])
         self.gap = self.get_gap()
         
-        self.get_single_leg_data = lru_cache()(self._get_single_leg_data)
-        self.get_straddle_data = lru_cache()(self._get_straddle_data)
-        self.get_strike = lru_cache()(self._get_strike)
-        self.sl_check_single_leg = lru_cache()(self._sl_check_single_leg)
-        self.sl_check_combine_leg = lru_cache()(self._sl_check_combine_leg)
-        self.decay_check_single_leg = lru_cache()(self._decay_check_single_leg)
-        self.sl_check_single_leg_with_sl_trail = lru_cache()(self._sl_check_single_leg_with_sl_trail)
-        self.sl_check_combine_leg_with_sl_trail = lru_cache()(self._sl_check_combine_leg_with_sl_trail)
-        self.straddle_indicator = lru_cache()(self._straddle_indicator)
+        self.get_single_leg_data = lru_cache(maxsize=4096)(self._get_single_leg_data)
+        self.get_straddle_data = lru_cache(maxsize=4096)(self._get_straddle_data)
+        self.get_strike = lru_cache(maxsize=4096)(self._get_strike)
+        self.sl_check_single_leg = lru_cache(maxsize=4096)(self._sl_check_single_leg)
+        self.sl_check_combine_leg = lru_cache(maxsize=4096)(self._sl_check_combine_leg)
+        self.decay_check_single_leg = lru_cache(maxsize=4096)(self._decay_check_single_leg)
+        self.sl_check_single_leg_with_sl_trail = lru_cache(maxsize=4096)(self._sl_check_single_leg_with_sl_trail)
+        self.sl_check_combine_leg_with_sl_trail = lru_cache(maxsize=4096)(self._sl_check_combine_leg_with_sl_trail)
+        self.straddle_indicator = lru_cache(maxsize=4096)(self._straddle_indicator)
 
     def get_future_option_path(self, index):
         index = index.lower()
@@ -935,7 +935,14 @@ class WeeklyBacktest(IntradayBacktest):
         self.options = self.options[(self.options['date_time'].dt.time >= start_time) & (self.options['date_time'].dt.time <= end_time)]
         self.options_data = self.options.set_index(['date_time', 'scrip'])
         self.gap = self.get_gap()
-        
+
+        self.get_EOD_straddle_strike = lru_cache(maxsize=4096)(self._get_EOD_straddle_strike)
+        self.get_strike = lru_cache(maxsize=4096)(self._get_strike)
+        self.sl_check_single_leg = lru_cache(maxsize=4096)(self._sl_check_single_leg)
+        self.sl_check_combine_leg = lru_cache(maxsize=4096)(self._sl_check_combine_leg)
+        self.sl_range_check_combine_leg = lru_cache(maxsize=4096)(self._sl_range_check_combine_leg)
+        self.decay_check_single_leg = lru_cache(maxsize=4096)(self._decay_check_single_leg)
+
     def get_synthetic_future(self, straddle_strike, ce_price, pe_price):
         synthetic_future = straddle_strike + ce_price - pe_price
         return synthetic_future        
@@ -1006,8 +1013,7 @@ class WeeklyBacktest(IntradayBacktest):
 
         return None, None, None, None, None, None
     
-    @lru_cache(maxsize=None)
-    def get_EOD_straddle_strike(self, current_date):
+    def _get_EOD_straddle_strike(self, current_date):
         
         check_limit = 15 #min
         start_dt = datetime.datetime.combine(current_date, datetime.time(15,29))
@@ -1118,8 +1124,7 @@ class WeeklyBacktest(IntradayBacktest):
                 
         return None, None, None, None, None, None
 
-    @lru_cache(maxsize=None)
-    def get_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1, only=None):
+    def _get_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1, only=None):
         
         if 'SD' in str(om).upper():
             sd = float(om.upper().replace(' ', '').replace('SD', ''))
@@ -1140,9 +1145,8 @@ class WeeklyBacktest(IntradayBacktest):
                 return ce_scrip, ce_price, future_price, start_dt
             elif only == "PE":
                 return pe_scrip, pe_price, future_price, start_dt
-        
-    @lru_cache(maxsize=None)
-    def sl_check_single_leg(self, start_dt, end_dt, scrip, o=None, sl=0, intra_sl=0, sl_price=None, target_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False):
+
+    def _sl_check_single_leg(self, start_dt, end_dt, scrip, o=None, sl=0, intra_sl=0, sl_price=None, target_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False):
         sl_flag, intra_sl_flag, target_flag, exit_time, pnl = False, False, False, '', 0
 
         try:
@@ -1249,8 +1253,7 @@ class WeeklyBacktest(IntradayBacktest):
             else:
                 return (sl_price, sl_flag, intra_sl_flag, target_flag, exit_time, pnl)
             
-    @lru_cache(maxsize=None)
-    def sl_check_combine_leg(self, start_dt, end_dt, ce_scrip, pe_scrip, o=None, sl=0, intra_sl=0, sl_price=None, intra_sl_price=None, target_price=None, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False):
+    def _sl_check_combine_leg(self, start_dt, end_dt, ce_scrip, pe_scrip, o=None, sl=0, intra_sl=0, sl_price=None, intra_sl_price=None, target_price=None, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False):
         sl_flag, intra_sl_flag, target_flag, exit_time, pnl = False, False, False, '', 0
 
         try:
@@ -1358,9 +1361,7 @@ class WeeklyBacktest(IntradayBacktest):
             else:
                 return (sl_price, intra_sl_price, sl_flag, intra_sl_flag, target_flag, exit_time, pnl)
             
-            
-    @lru_cache(maxsize=None)
-    def sl_range_check_combine_leg(self, start_dt, end_dt, ce_scrip, pe_scrip, lower_range, upper_range, intra_lower_range, intra_upper_range, straddle_strike, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False, eod_modify=False, range_sl=None, intra_range_sl=None, is_on_synthetic=False, need_day_wise_mtm=False):
+    def _sl_range_check_combine_leg(self, start_dt, end_dt, ce_scrip, pe_scrip, lower_range, upper_range, intra_lower_range, intra_upper_range, straddle_strike, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False, eod_modify=False, range_sl=None, intra_range_sl=None, is_on_synthetic=False, need_day_wise_mtm=False):
         sl_flag, intra_sl_flag, exit_time, pnl = False, False, '', 0
         day_wise_mtm, day_wise_mtm2 = {}, {}
 
@@ -1479,8 +1480,7 @@ class WeeklyBacktest(IntradayBacktest):
                 else:
                     return (sl_flag, intra_sl_flag, exit_time, pnl)
                 
-    @lru_cache(maxsize=None)
-    def decay_check_single_leg(self, start_dt, end_dt, scrip, decay=None, decay_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False):
+    def _decay_check_single_leg(self, start_dt, end_dt, scrip, decay=None, decay_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False):
         
         decay_flag, decay_time = False, ''
         
@@ -1522,6 +1522,9 @@ class WeeklyBacktest(IntradayBacktest):
             return o, h, l, c, decay_price, decay_flag, decay_time
         else:
             return decay_price, decay_flag, decay_time
+        
+    def __del__(self) -> None:
+        print("Deleting instance ...")
 
 
 class MonthlyBacktest(WeeklyBacktest):

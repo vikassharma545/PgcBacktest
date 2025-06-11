@@ -935,17 +935,23 @@ class WeeklyBacktest(IntradayBacktest):
         self.options = self.options[(self.options['date_time'].dt.time >= start_time) & (self.options['date_time'].dt.time <= end_time)]
         self.options_data = self.options.set_index(['date_time', 'scrip'])
         self.gap = self.get_gap()
-
-        self.get_EOD_straddle_strike = lru_cache(maxsize=4096)(self._get_EOD_straddle_strike)
+        
+        self.get_single_leg_data = lru_cache(maxsize=4096)(self._get_single_leg_data)
+        self.get_straddle_data = lru_cache(maxsize=4096)(self._get_straddle_data)
         self.get_strike = lru_cache(maxsize=4096)(self._get_strike)
         self.sl_check_single_leg = lru_cache(maxsize=4096)(self._sl_check_single_leg)
         self.sl_check_combine_leg = lru_cache(maxsize=4096)(self._sl_check_combine_leg)
-        self.sl_range_check_combine_leg = lru_cache(maxsize=4096)(self._sl_range_check_combine_leg)
         self.decay_check_single_leg = lru_cache(maxsize=4096)(self._decay_check_single_leg)
+        self.sl_check_single_leg_with_sl_trail = lru_cache(maxsize=4096)(self._sl_check_single_leg_with_sl_trail)
+        self.sl_check_combine_leg_with_sl_trail = lru_cache(maxsize=4096)(self._sl_check_combine_leg_with_sl_trail)
+        self.straddle_indicator = lru_cache(maxsize=4096)(self._straddle_indicator)
+
+        self.get_EOD_straddle_strike = lru_cache(maxsize=4096)(self._get_EOD_straddle_strike)
+        self.sl_range_check_combine_leg = lru_cache(maxsize=4096)(self._sl_range_check_combine_leg)
 
     def get_synthetic_future(self, straddle_strike, ce_price, pe_price):
         synthetic_future = straddle_strike + ce_price - pe_price
-        return synthetic_future        
+        return synthetic_future
         
     def get_sl_range(self, strike, premium, range_sl, intra_range_sl):
         range_limit = premium * (range_sl/100)

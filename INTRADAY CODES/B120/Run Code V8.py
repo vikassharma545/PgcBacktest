@@ -1,3 +1,4 @@
+import re
 import os 
 import sys
 import math
@@ -45,10 +46,10 @@ def menu_driver(options, msg=''):
             print("Enter a number.")
 
 # --- Notebook to Script Converter ---
-output_csv_path = ""
+code, output_csv_path = "", ""
 def convert_notebook_to_script(notebook_path, script_path, temp_meta_data_path):
-    global output_csv_path
-    output_csv_path = ""
+    global output_csv_path, code
+    code, output_csv_path = "", ""
     
     with open(notebook_path, 'r', encoding='utf-8') as nb_file:
         nb_content = nbformat.read(nb_file, as_version=4)
@@ -60,8 +61,15 @@ def convert_notebook_to_script(notebook_path, script_path, temp_meta_data_path):
                 for idx, value in enumerate(source):
                     if "meta_data_path =" in value:
                         source[idx] = f"meta_data_path = f'{temp_meta_data_path}'"
-                    if ("output_csv_path =" in value):
+                    if "output_csv_path =" in value:
                         output_csv_path = source[idx]
+                        output_csv_path = output_csv_path.split("=")[-1].strip()
+                        output_csv_path = re.search(r'[\'"](.*?)[\'"]', output_csv_path).group(1).replace('\\\\', '\\')
+                    if "code =" in value:
+                        code = source[idx]
+                        code = code.split("=")[-1].strip()
+                        code = re.search(r'[\'"](.*?)[\'"]', code).group(1)
+                        
                 nb_content['cells'][cell_idx]['source'] = '\n'.join(source)
         
     script, _ = PythonExporter().from_notebook_node(nb_content)
@@ -91,7 +99,7 @@ code_base = jupyter_code.replace('.ipynb', '').title()
 # --- Convert and Prepare ---
 script_output = strategy_cache_path.format(strategy=code_base) + ".py"
 convert_notebook_to_script(jupyter_code, script_output, parameter_meta_data_for_run)
-code_details = f'\n#### RUN CODE ####\nCode: {jupyter_code}\nParameter: {parameter_csv} \nMetaData Parameter: {parameter_meta_data} \n##################'
+code_details = f'\n#### RUN CODE ####\nCode: {code}\nJupyterCode: {jupyter_code} \nParameter: {parameter_csv} \nMetaData Parameter: {parameter_meta_data} \n##################'
 print(code_details)
 
 # --- Python Path ---
@@ -119,13 +127,10 @@ if check_duplicate_runs() > 1:
 from pgcbacktest.BtParameters import *
 from pgcbacktest.BacktestOptions import *
 pickle_path = 'C:/PICKLE/'
-parameter_code = parameter_csv.split('_', maxsplit=1)[-1].split('.')[0]
-_, parameter_len = get_parameter_data(parameter_code, parameter_csv)
-meta_data, _ = get_meta_data(parameter_code, parameter_meta_data)
+_, parameter_len = get_parameter_data(code, parameter_csv)
+meta_data, _ = get_meta_data(code, parameter_meta_data)
 no_of_chunk = math.ceil(parameter_len/chunk_size)
-
-output_csv_path = output_csv_path.split("f'{code}")[-1].split('\\')[0]
-output_csv_path = f"{parameter_code}{output_csv_path}/"
+output_csv_path = output_csv_path.format(code=code) if "{code}" in output_csv_path else output_csv_path
 
 index_dates = {}
 index_dte_dates = {}
@@ -136,7 +141,7 @@ for row_idx in range(len(meta_data)):
         index, dte, _, _, _, _, date_lists = get_meta_row_data(meta_row, pickle_path)
         total_dates += len(date_lists)
         index_dates[index] = index_dates.get(index, 0) + len(date_lists)
-        files_dates = [current_date.date() for current_date in date_lists if not is_file_exists(output_csv_path, f"{index} {current_date.date()} {parameter_code}", parameter_len)]
+        files_dates = [current_date.date() for current_date in date_lists if not is_file_exists(output_csv_path, f"{index} {current_date.date()} {code}", parameter_len)]
 
         if files_dates:
             total_pending_dates += len(files_dates)
@@ -144,6 +149,8 @@ for row_idx in range(len(meta_data)):
 
 file_details = f'\n####### OUTPUT FILES #######\nNo of Chunks: {no_of_chunk} \nTotals Dates: {total_dates} \nTotal Files Created: {no_of_chunk*total_dates}\nDates IndexWise: {index_dates} \n############################'
 print(file_details)
+
+print(f"\nPending Dates: {total_pending_dates}")
 
 if total_pending_dates == 0:
     print('\nNo Pending Dates Left all Dates files Complete :)')
@@ -175,6 +182,7 @@ if no_of_terminal_allowed > 0:
                     break
 
             if splited:
+                no_of_terminal_allowed = len(sorted_keys)
                 break
 
             sorted_keys = sorted(index_dte_dates.keys(), key=lambda k: len(index_dte_dates[k]), reverse=True)
@@ -203,23 +211,27 @@ for idx, row in df.iterrows():
 # --- Monitoring Memory and CPU ---
 terminal_title = f'{code_base} : Code Monitor: Auto Restart on High RAM'
 ctypes.windll.kernel32.SetConsoleTitleW(terminal_title)
-check_time = datetime.datetime.now()
+check_time = datetime.datetime.now() + datetime.timedelta(minutes=5)
 
 while True:
     try:
         mem_usage = psutil.virtual_memory().percent
         cpu_usage = psutil.cpu_percent()
-        msg = f"{code_details}\n{file_details}\n\n🧠 RAM Used: {mem_usage}%\n🖥 CPU Used: {cpu_usage}%"
         
         total_pending_dates = 0
         for row_idx in range(len(meta_data)):
             if meta_data.loc[row_idx, 'run']:
                 meta_row = meta_data.iloc[row_idx]
                 index, dte, _, _, _, _, date_lists = get_meta_row_data(meta_row, pickle_path)
-                files_dates = [current_date.date() for current_date in date_lists if not is_file_exists(output_csv_path, f"{index} {current_date.date()} {parameter_code}", parameter_len)]
+                files_dates = [current_date.date() for current_date in date_lists if not is_file_exists(output_csv_path, f"{index} {current_date.date()} {code}", parameter_len)]
                 total_pending_dates += len(files_dates)
                 
-        msg = f"{code_details}\n{file_details}\n\n🧠 RAM Used: {mem_usage}%\n🖥 CPU Used: {cpu_usage}% \nPending Dates: {total_pending_dates}"
+        if total_pending_dates == 0:
+            print('\nNo Pending Dates Left all Dates files Complete :)')
+            sleep(5)
+            sys.exit()
+
+        msg = f"{code_details}\n{file_details}\n\n🧠 RAM Used: {mem_usage}%\n🖥 CPU Used: {cpu_usage}% \n🖥 Pending Dates: {total_pending_dates} \n🖥 No of Terminal Running: {no_of_terminal_allowed}"
         
         code_count = no_of_terminal_allowed
         if (no_of_terminal_allowed != -1) and (check_time < datetime.datetime.now()):
@@ -235,10 +247,10 @@ while True:
                             except:
                                 pass
 
-            check_time += datetime.timedelta(minutes=10)
+            check_time += datetime.timedelta(minutes=5)
 
         # High memory condition
-        if mem_usage > 90 or (no_of_terminal_allowed != -1 and code_count < math.floor(no_of_terminal_allowed*0.60)):
+        if mem_usage > 90 or (no_of_terminal_allowed != -1 and code_count < math.floor(no_of_terminal_allowed*0.70)):
             
             if  mem_usage > 90:
                 print(f"\nHigh RAM: {mem_usage}% at {datetime.datetime.now()}\n")
@@ -270,7 +282,7 @@ while True:
                 if meta_data.loc[row_idx, 'run']:
                     meta_row = meta_data.iloc[row_idx]
                     index, dte, _, _, _, _, date_lists = get_meta_row_data(meta_row, pickle_path)
-                    files_dates = [current_date.date() for current_date in date_lists if not is_file_exists(output_csv_path, f"{index} {current_date.date()} {parameter_code}", parameter_len)]
+                    files_dates = [current_date.date() for current_date in date_lists if not is_file_exists(output_csv_path, f"{index} {current_date.date()} {code}", parameter_len)]
 
                     if files_dates:
                         total_pending_dates += len(files_dates)
@@ -301,7 +313,7 @@ while True:
                                 break
 
                         if splited:
-                            no_of_terminal_allowed = -1
+                            no_of_terminal_allowed = len(sorted_keys)
                             break
 
                         sorted_keys = sorted(index_dte_dates.keys(), key=lambda k: len(index_dte_dates[k]), reverse=True)

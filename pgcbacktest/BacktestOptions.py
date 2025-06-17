@@ -146,7 +146,7 @@ class IntradayBacktest:
             straddle_data['close'] = ce_data['close'] + pe_data['close']
             return straddle_data
 
-    def get_straddle_strike(self, start_dt, end_dt, sd=0):
+    def get_straddle_strike(self, start_dt, end_dt, sd=0, roundoff=False):
         while start_dt < end_dt:
             try:
                 # find strike nearest to future price
@@ -182,7 +182,11 @@ class IntradayBacktest:
         
                 if sd:
                     sd_range = (ce_price+pe_price)*sd
-                    sd_range = max(self.gap, round(sd_range/self.gap)*self.gap)
+                    
+                    if roundoff:
+                        sd_range = round(sd_range/self.gap)*self.gap
+                    else:
+                        sd_range = max(self.gap, round(sd_range/self.gap)*self.gap)
                     ce_scrip, pe_scrip = f"{int(ce_scrip[:-2]) + sd_range}CE", f"{int(pe_scrip[:-2]) - sd_range}PE"
                     ce_price, pe_price = self.options_data.loc[(start_dt,ce_scrip),'close'], self.options_data.loc[(start_dt,pe_scrip),'close']
                 
@@ -277,7 +281,7 @@ class IntradayBacktest:
 
         return None, None, None, None, None, None
 
-    def _get_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1, only=None, obove_target_only=False):
+    def _get_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1, only=None, obove_target_only=False, roundoff=False):
         
         if '%' in str(om) or obove_target_only:
             
@@ -298,7 +302,7 @@ class IntradayBacktest:
                 om = float(om) if om else om
 
             if (om is None or om <= 0) and target is None:
-                ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_straddle_strike(start_dt, end_dt, sd=sd)
+                ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_straddle_strike(start_dt, end_dt, sd=sd, roundoff=roundoff)
             else:
                 ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_strangle_strike(start_dt, end_dt, om=om, target=target, check_inverted=check_inverted, tf=tf)
                 

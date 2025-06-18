@@ -4,7 +4,6 @@ import sys
 import math
 import ctypes
 import psutil
-import requests
 import nbformat
 import datetime
 import subprocess
@@ -12,13 +11,6 @@ import numpy as np
 import pandas as pd
 from time import sleep
 from nbconvert import PythonExporter
-
-# --- Telegram Bot Function ---
-def send_msg_telegram(msg):
-    try:
-        requests.get(f'https://api.telegram.org/bot5156026417:AAExQbrMAPrV0qI8tSYplFDjZltLBzXTm1w/sendMessage?chat_id=-607631145&text={msg}')
-    except Exception as e:
-        print(f"Telegram Error: {e}")
 
 def fun_timer(seconds):
     for i in range(seconds, -1, -1):
@@ -46,10 +38,7 @@ def menu_driver(options, msg=''):
             print("Enter a number.")
 
 # --- Notebook to Script Converter ---
-code, output_csv_path = "", ""
 def convert_notebook_to_script(notebook_path, script_path, temp_meta_data_path):
-    global output_csv_path, code
-    code, output_csv_path = "", ""
     
     with open(notebook_path, 'r', encoding='utf-8') as nb_file:
         nb_content = nbformat.read(nb_file, as_version=4)
@@ -75,6 +64,8 @@ def convert_notebook_to_script(notebook_path, script_path, temp_meta_data_path):
     script, _ = PythonExporter().from_notebook_node(nb_content)
     with open(script_path, 'w', encoding='utf-8') as py_file:
         py_file.write(script)
+        
+    return code, output_csv_path
 
 # --- Platform-specific paths ---
 cache_path = "C:/.temp"
@@ -83,7 +74,7 @@ os.makedirs(cache_path, exist_ok=True)
 
 # --- File Detection ---
 all_files = os.listdir()
-jupyter_files = [f for f in all_files if f.endswith('.ipynb')]
+jupyter_files = [f for f in all_files if f.endswith('.ipynb') and 'Untitled' not in f]
 parameter_csv_files = [f for f in all_files if f.endswith('.csv') and 'metadata' not in f.lower() and "parameter" in f.lower()]
 meta_data_csv_files = [f for f in all_files if f.endswith('.csv') and 'metadata' in f.lower()]
 
@@ -98,31 +89,13 @@ code_base = jupyter_code.replace('.ipynb', '').title()
 
 # --- Convert and Prepare ---
 script_output = strategy_cache_path.format(strategy=code_base) + ".py"
-convert_notebook_to_script(jupyter_code, script_output, parameter_meta_data_for_run)
+code, output_csv_path = convert_notebook_to_script(jupyter_code, script_output, parameter_meta_data_for_run)
 code_details = f'\n#### RUN CODE ####\nCode: {code}\nJupyterCode: {jupyter_code} \nParameter: {parameter_csv} \nMetaData Parameter: {parameter_meta_data} \n##################'
 print(code_details)
 
 # --- Python Path ---
 python_path = [p for p in sys.path if p.endswith("\\Lib\\site-packages")][0].replace("\\Lib\\site-packages", "") + "\\python.exe"
 python_path = python_path.replace("\\", "/")
-    
-# --- Check Duplicate Code Execution ---
-def check_duplicate_runs():
-    count = 0
-    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-        try:
-            if 'python' in proc.info['name'].lower():
-                for arg in proc.info.get('cmdline', []):
-                    if os.path.normpath(arg) == os.path.normpath(sys.argv[0]):
-                        count+=1
-        except:
-            pass
-    return count
-
-if check_duplicate_runs() > 1:
-    print("\nRun Code Already Running for this Code :)")
-    sleep(5)
-    sys.exit()
 
 from pgcbacktest.BtParameters import *
 from pgcbacktest.BacktestOptions import *
@@ -182,7 +155,7 @@ if no_of_terminal_allowed > 0:
                     break
 
             if splited:
-                no_of_terminal_allowed = len(sorted_keys)
+                no_of_terminal_allowed = -1
                 break
 
             sorted_keys = sorted(index_dte_dates.keys(), key=lambda k: len(index_dte_dates[k]), reverse=True)
@@ -199,25 +172,23 @@ else:
     meta_data.to_csv(parameter_meta_data_for_run, index=False)
 print('MetaData Created')
 
+processes = []
 print('\nRunning Code...\n')
 # --- Read CSV and Start Codes ---
 df = pd.read_csv(parameter_meta_data_for_run)
 for idx, row in df.iterrows():
     if row.get('run', False):
         print(f"Running Row {idx}: {code_base}")
-        subprocess.run(["start", python_path, script_output, "-r", str(idx)], shell=True)
-        sleep(2)
+        proc = subprocess.Popen([python_path, script_output, "-r", str(idx)], creationflags=subprocess.CREATE_NEW_CONSOLE)
+        processes.append(proc)
+        sleep(5)
 
 # --- Monitoring Memory and CPU ---
 terminal_title = f'{code_base} : Code Monitor: Auto Restart on High RAM'
 ctypes.windll.kernel32.SetConsoleTitleW(terminal_title)
-check_time = datetime.datetime.now() + datetime.timedelta(minutes=5)
 
 while True:
     try:
-        mem_usage = psutil.virtual_memory().percent
-        cpu_usage = psutil.cpu_percent()
-        
         total_pending_dates = 0
         for row_idx in range(len(meta_data)):
             if meta_data.loc[row_idx, 'run']:
@@ -230,50 +201,45 @@ while True:
             print('\nNo Pending Dates Left all Dates files Complete :)')
             sleep(5)
             sys.exit()
-
-        msg = f"{code_details}\n{file_details}\n\n🧠 RAM Used: {mem_usage}%\n🖥 CPU Used: {cpu_usage}% \n🖥 Pending Dates: {total_pending_dates} \n🖥 No of Terminal Running: {no_of_terminal_allowed}"
-        
-        code_count = no_of_terminal_allowed
-        if (no_of_terminal_allowed != -1) and (check_time < datetime.datetime.now()):
             
-            code_count = 0
-            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-                if 'python' in proc.info['name'].lower():
-                    for arg in proc.info.get('cmdline', []):
-                        if script_output in arg:
-                            try:
-                                code_count += 1
-                                break
-                            except:
-                                pass
+        mem_usage = psutil.virtual_memory().percent
+        cpu_usage = psutil.cpu_percent()
+        
+        df = pd.read_csv(parameter_meta_data_for_run)
+        for idx, proc in enumerate(processes[::]):
+            if proc.poll() is not None:
 
-            check_time += datetime.timedelta(minutes=5)
+                meta_row = df.loc[int(proc.args[-1])]
+                index, dte, _, _, _, _, date_lists = get_meta_row_data(meta_row, pickle_path)
+                pending_files = [current_date.date() for current_date in date_lists if not is_file_exists(output_csv_path, f"{index} {current_date.date()} {code}", parameter_len)]
+
+                if pending_files:
+                    print('Founded Closed terminal', proc.args[-1])
+                    proc = subprocess.Popen(proc.args, creationflags=subprocess.CREATE_NEW_CONSOLE)
+                    print('Started Again terminal', proc.args[-1])
+                    sleep(2)
+                    processes[idx] = proc
+
+        no_of_terminal_running = len([proc.poll() for proc in processes if proc.poll() is None])
+        msg = f"{code_details}\n{file_details}\n\n🧠 RAM Used: {mem_usage}%\n🖥 CPU Used: {cpu_usage}% \n🖥 Pending Dates: {total_pending_dates} \n🖥 No of Terminal Allowed: {no_of_terminal_allowed} \n🖥 No of Terminal Running: {no_of_terminal_running}"
 
         # High memory condition
-        if mem_usage > 90 or (no_of_terminal_allowed != -1 and code_count < math.floor(no_of_terminal_allowed*0.70)):
+        if mem_usage > 90 or (no_of_terminal_allowed != -1 and no_of_terminal_running < math.floor(no_of_terminal_allowed*0.70)):
             
-            if  mem_usage > 90:
+            if mem_usage > 90:
                 print(f"\nHigh RAM: {mem_usage}% at {datetime.datetime.now()}\n")
             else:
-                print(f"\nNumber of Terminal Running - {code_count} << {no_of_terminal_allowed}")
+                print(f"\nNumber of Terminal Running - {no_of_terminal_running} << {no_of_terminal_allowed}")
             
-            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-                if 'python' in proc.info['name'].lower():
-                    for arg in proc.info.get('cmdline', []):
-                        if script_output in arg:
-                            try:
-                                psutil.Process(proc.info['pid']).terminate()
-                                sleep(0.5)
-                                psutil.Process(proc.info['pid']).terminate()
-                                sleep(0.5)
-                                psutil.Process(proc.info['pid']).terminate()
-                                sleep(0.5)
-                                psutil.Process(proc.info['pid']).terminate()
-                                sleep(0.5)
-                                print(f"Killed - {arg}")
-                                break
-                            except:
-                                pass
+            # Killed Processes
+            for proc in processes:
+                try:
+                    proc.terminate()
+                    proc.wait(timeout=2)
+                    print(f"Killed - {proc.args[-1]}")
+                except psutil.TimeoutExpired:
+                    proc.kill()
+                    print(f"Forced kill - {proc.args[-1]}")
 
             print('MetaData Creating...')
             index_dte_dates = {}
@@ -313,7 +279,7 @@ while True:
                                 break
 
                         if splited:
-                            no_of_terminal_allowed = len(sorted_keys)
+                            no_of_terminal_allowed = -1
                             break
 
                         sorted_keys = sorted(index_dte_dates.keys(), key=lambda k: len(index_dte_dates[k]), reverse=True)
@@ -332,20 +298,24 @@ while True:
 
             # Restart the script
             print('\nCode is About to Restart in ...')
-            fun_timer(100)
+            fun_timer(70)
+            processes = []
+            print('\nRunning Code...\n')
             # --- Read CSV and Start Codes ---
             df = pd.read_csv(parameter_meta_data_for_run)
             for idx, row in df.iterrows():
                 if row.get('run', False):
                     print(f"Running Row {idx}: {code_base}")
-                    subprocess.run(["start", python_path, script_output, "-r", str(idx)], shell=True)
-                    sleep(2)
+                    proc = subprocess.Popen([python_path, script_output, "-r", str(idx)], creationflags=subprocess.CREATE_NEW_CONSOLE)
+                    processes.append(proc)
+                    sleep(5)
+
         else:
+            print()
+            fun_timer(10)
             os.system('cls' if os.name == 'nt' else 'clear')
             print(msg, end='\r')
-            sleep(5)
 
     except Exception as e:
         err_msg = f"Error in monitoring loop: {e}"
         print(err_msg)
-        input("Press Enter to continue...")

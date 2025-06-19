@@ -398,7 +398,7 @@ def get_parameter_data(code, parameter_path):
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
             
 
-    elif (code == 'SRE_PREMIUM_SHIFT') or (code == 'SRE_PREMIUM_SHIFT_PSL') or (code == 'SRE_PREMIUM_SHIFT_TRAIL') or (code == 'SRE_PREMIUM_SHIFT_TRAIL_PSL'):
+    elif (code == 'SRE_PREMIUM_SHIFT') or (code == 'SRE_PREMIUM_SHIFT_PSL') or (code == 'SRE_PREMIUM_SHIFT_TRAIL') or (code == 'SRE_PREMIUM_SHIFT_TRAIL_PSL') or (code == 'SRE_PREMIUM_SHIFT_ACTION') or (code == 'SRE_PREMIUM_SHIFT_ACTION_PSL'):
         
         parameter['orderside'] = parameter['orderside'].str.upper()
         

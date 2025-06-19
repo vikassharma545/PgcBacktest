@@ -1,5 +1,6 @@
 import re
-import os 
+import os
+import gc
 import sys
 import math
 import ctypes
@@ -10,6 +11,7 @@ import subprocess
 import numpy as np
 import pandas as pd
 from time import sleep
+import pygetwindow as gw
 from nbconvert import PythonExporter
 
 def fun_timer(seconds):
@@ -35,7 +37,7 @@ def menu_driver(options, msg=''):
             else:
                 print("Invalid choice.")
         except ValueError:
-            print("Enter a number.")
+            print("Enter a number !!!")
 
 # --- Notebook to Script Converter ---
 def convert_notebook_to_script(notebook_path, script_path, temp_meta_data_path):
@@ -129,6 +131,15 @@ if total_pending_dates == 0:
     print('\nNo Pending Dates Left all Dates files Complete :)')
     sleep(5)
     sys.exit()
+    
+terminal_title = f'Code Monitor: {code_base}'
+windows_titles = [window.title for window in gw.getAllWindows()]
+if terminal_title in windows_titles:
+    print("\nRun Code Already Running for this Code :)")
+    sleep(5)
+    sys.exit()
+else:
+    ctypes.windll.kernel32.SetConsoleTitleW(terminal_title)
 
 print('MetaData Creating...')
 if no_of_terminal_allowed > 0:
@@ -183,10 +194,8 @@ for idx, row in df.iterrows():
         processes.append(proc)
         sleep(5)
 
-# --- Monitoring Memory and CPU ---
-terminal_title = f'{code_base} : Code Monitor: Auto Restart on High RAM'
-ctypes.windll.kernel32.SetConsoleTitleW(terminal_title)
-
+# --- Monitoring Memory/CPU & Terminals ---
+check_time = datetime.datetime.now() + datetime.timedelta(minutes=5)
 while True:
     try:
         total_pending_dates = 0
@@ -214,22 +223,22 @@ while True:
                 pending_files = [current_date.date() for current_date in date_lists if not is_file_exists(output_csv_path, f"{index} {current_date.date()} {code}", parameter_len)]
 
                 if pending_files:
-                    print('Founded Closed terminal', proc.args[-1])
+                    print(f"Running Row {proc.args[-1]}: {code_base}")
                     proc = subprocess.Popen(proc.args, creationflags=subprocess.CREATE_NEW_CONSOLE)
-                    print('Started Again terminal', proc.args[-1])
-                    sleep(2)
+                    sleep(5)
                     processes[idx] = proc
 
         no_of_terminal_running = len([proc.poll() for proc in processes if proc.poll() is None])
         msg = f"{code_details}\n{file_details}\n\n🧠 RAM Used: {mem_usage}%\n🖥 CPU Used: {cpu_usage}% \n🖥 Pending Dates: {total_pending_dates} \n🖥 No of Terminal Allowed: {no_of_terminal_allowed} \n🖥 No of Terminal Running: {no_of_terminal_running}"
 
         # High memory condition
-        if mem_usage > 90 or (no_of_terminal_allowed != -1 and no_of_terminal_running < math.floor(no_of_terminal_allowed*0.70)):
+        if mem_usage > 90 or (no_of_terminal_allowed != -1 and check_time < datetime.datetime.now() and no_of_terminal_running < math.floor(no_of_terminal_allowed*0.70)):
             
             if mem_usage > 90:
                 print(f"\nHigh RAM: {mem_usage}% at {datetime.datetime.now()}\n")
             else:
                 print(f"\nNumber of Terminal Running - {no_of_terminal_running} << {no_of_terminal_allowed}")
+                check_time += datetime.timedelta(minutes=5)
             
             # Killed Processes
             for proc in processes:
@@ -312,6 +321,7 @@ while True:
 
         else:
             print()
+            gc.collect()
             fun_timer(10)
             os.system('cls' if os.name == 'nt' else 'clear')
             print(msg, end='\r')

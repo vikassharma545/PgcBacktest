@@ -18,7 +18,9 @@ setup(
         "plotly==6.0.1",
         "numba==0.61.2",
         "numpy==2.2.4",
-        "PyGetWindow==0.0.9"
+        "PyGetWindow==0.0.9",
+        "requests==2.32.3",
+        "matplotlib==3.9.2"
     ],
     python_requires=">=3.10",
     classifiers=[

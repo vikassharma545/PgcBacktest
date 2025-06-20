@@ -11,7 +11,14 @@ setup(
     license="MIT",
     packages=find_packages(),
     install_requires=[
-        "tqdm",
+        "tqdm==4.67.1",
+        "pandas==2.2.3",
+        "polars==1.27.1",
+        "streamlit==1.44.1",
+        "plotly==6.0.1",
+        "numba==0.61.2",
+        "numpy==2.2.4",
+        "PyGetWindow==0.0.9"
     ],
     python_requires=">=3.10",
     classifiers=[

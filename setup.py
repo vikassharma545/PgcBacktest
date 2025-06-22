@@ -20,7 +20,9 @@ setup(
         "numpy==2.2.4",
         "PyGetWindow==0.0.9",
         "requests==2.32.3",
-        "matplotlib==3.9.2"
+        "matplotlib==3.9.2",
+        "nbconvert==7.16.6",
+        "nbformat==5.10.4"
     ],
     python_requires=">=3.10",
     classifiers=[

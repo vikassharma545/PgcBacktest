@@ -398,6 +398,11 @@ def get_parameter_data(code, parameter_path):
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
             
 
+    elif (code == 'SRE_SEPARATE_LEG_SL'):
+
+        parameter['orderside'] = parameter['orderside'].str.upper()
+            
+
     elif (code == 'SRE_PREMIUM_SHIFT') or (code == 'SRE_PREMIUM_SHIFT_PSL') or (code == 'SRE_PREMIUM_SHIFT_TRAIL') or (code == 'SRE_PREMIUM_SHIFT_TRAIL_PSL') or (code == 'SRE_PREMIUM_SHIFT_ACTION') or (code == 'SRE_PREMIUM_SHIFT_ACTION_PSL'):
         
         parameter['orderside'] = parameter['orderside'].str.upper()
@@ -428,6 +433,15 @@ def get_parameter_data(code, parameter_path):
         
         if code == 'SRE_SI_PSL':
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
+            
+            
+    elif (code == 'SRE_SEPARATE_LEG_SL_PSL'):
+        
+        parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
+        parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
+        
+        parameter['trade_interval'] = parameter['trade_interval'].str.upper()
+        parameter['orderside'] = parameter['orderside'].str.upper()
             
     
     elif (code == 'SUT') or (code == 'SUTW') or (code == 'SUT_SI'):

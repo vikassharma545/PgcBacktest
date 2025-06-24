@@ -10,6 +10,8 @@ from time import sleep
 import concurrent.futures
 import dask.dataframe as dd
 
+pl.enable_string_cache()
+
 os.system(f'title DashBoard FileMaker')
 
 def print_heading(title="🗂 Folder Selection & Configuration"):

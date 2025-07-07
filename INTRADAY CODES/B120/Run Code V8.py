@@ -1,6 +1,5 @@
 import re
 import os
-import gc
 import sys
 import math
 import ctypes
@@ -232,7 +231,7 @@ while True:
         msg = f"{code_details}\n{file_details}\n\n🧠 RAM Used: {mem_usage}%\n🖥 CPU Used: {cpu_usage}% \n🖥 Pending Dates: {total_pending_dates} \n🖥 No of Terminal Allowed: {no_of_terminal_allowed} \n🖥 No of Terminal Running: {no_of_terminal_running}"
 
         # High memory condition
-        if mem_usage > 90 or (no_of_terminal_allowed != -1 and check_time < datetime.datetime.now() and no_of_terminal_running < math.floor(no_of_terminal_allowed*0.70)):
+        if mem_usage > 90 or (no_of_terminal_running == 0) or (no_of_terminal_allowed != -1 and check_time < datetime.datetime.now() and no_of_terminal_running < math.floor(no_of_terminal_allowed*0.70)):
             
             if mem_usage > 90:
                 print(f"\nHigh RAM: {mem_usage}% at {datetime.datetime.now()}\n")
@@ -307,7 +306,11 @@ while True:
 
             # Restart the script
             print('\nCode is About to Restart in ...')
-            fun_timer(70)
+            if no_of_terminal_running == 0:
+                fun_timer(5)
+            else:
+                fun_timer(60)
+                
             processes = []
             print('\nRunning Code...\n')
             # --- Read CSV and Start Codes ---
@@ -321,11 +324,10 @@ while True:
 
         else:
             print()
-            gc.collect()
             fun_timer(10)
-            os.system('cls' if os.name == 'nt' else 'clear')
+            os.system('cls')
             print(msg, end='\r')
 
     except Exception as e:
         err_msg = f"Error in monitoring loop: {e}"
-        print(err_msg)
+        input(err_msg)

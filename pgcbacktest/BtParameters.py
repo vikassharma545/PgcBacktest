@@ -6,7 +6,8 @@ import itertools
 import pandas as pd
 
 def get_dte_file(pickle_path):
-    dte_file = pd.read_csv(f"{pickle_path}DTE.csv", parse_dates=['Date'], dayfirst=True).set_index("Date")
+    dtypes = {"Day": "category", "BANKNIFTY": "Int8", "NIFTY": "Int8", "FINNIFTY": "Int8", "MIDCPNIFTY": "Int8", "BANKEX": "Int8", "SENSEX": "Int8"}
+    dte_file = pd.read_csv(f"{pickle_path}DTE.csv", parse_dates=['Date'], dayfirst=True, dtype=dtypes).set_index("Date")
     return dte_file
 
 def get_index_data(index, pickle_path):
@@ -15,8 +16,11 @@ def get_index_data(index, pickle_path):
 
 def get_meta_data(code, meta_data_path):
     
-    meta_data = pd.read_csv(meta_data_path)
-    
+    dtypes = {"index": "category", "dte":"Int8", "run":"bool"}
+    meta_data = pd.read_csv(meta_data_path, parse_dates=["from_date", "to_date"], dayfirst=True, dtype=dtypes)
+    meta_data["start_time"] = pd.to_datetime(meta_data["start_time"], format="%H:%M:%S").dt.time
+    meta_data["end_time"] = pd.to_datetime(meta_data["end_time"], format="%H:%M:%S").dt.time
+        
     meta_row_nos = None
     if 'ipykernel' not in sys.modules:
         parser = argparse.ArgumentParser()
@@ -32,11 +36,8 @@ def get_meta_data(code, meta_data_path):
     return meta_data, meta_row_nos
 
 def get_meta_row_data(meta_row, pickle_path, weekly=False, monthly=False):
-    index = meta_row['index']
-    from_date = pd.to_datetime(meta_row['from_date'].replace(' ', '').replace('/', '-'), format="%d-%m-%Y")
-    to_date = pd.to_datetime(meta_row['to_date'].replace(' ', '').replace('/', '-'), format="%d-%m-%Y")
-    start_time = pd.to_datetime(meta_row['start_time'].replace(' ', '')[0:5], format="%H:%M").time()
-    end_time = pd.to_datetime(meta_row['end_time'].replace(' ', '')[0:5], format="%H:%M").time()
+    
+    index, from_date, to_date, start_time, end_time = meta_row['index'], meta_row['from_date'], meta_row['to_date'], meta_row['start_time'], meta_row['end_time']
     dte_file = get_dte_file(pickle_path)
 
     if not weekly and not monthly:

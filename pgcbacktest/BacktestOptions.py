@@ -51,7 +51,9 @@ class IntradayBacktest:
         self.pickle_path, self.index, self.current_date, self.dte = pickle_path, index, current_date, dte
         self.__future_pickle_path, self.__option_pickle_path = self.get_future_option_path(index)
         self.future_data = pd.read_pickle(self.__future_pickle_path.format(date=self.current_date.date())).set_index(['date_time'])
+        self.future_data = self.future_data[["open", "high", "low", "close"]]
         self.options = pd.read_pickle(self.__option_pickle_path.format(date=self.current_date.date()))
+        self.options = self.options[["scrip", "date_time", "open", "high", "low", "close"]]
         self.options = self.options[(self.options['date_time'].dt.time >= start_time) & (self.options['date_time'].dt.time <= end_time)]
         self.options_data = self.options.set_index(['date_time', 'scrip'])
         self.gap = self.get_gap()
@@ -146,7 +148,7 @@ class IntradayBacktest:
             straddle_data['close'] = ce_data['close'] + pe_data['close']
             return straddle_data
 
-    def get_straddle_strike(self, start_dt, end_dt, sd=0, roundoff=False):
+    def get_straddle_strike(self, start_dt, end_dt, sd=0, SDroundoff=False):
         while start_dt < end_dt:
             try:
                 # find strike nearest to future price
@@ -183,10 +185,11 @@ class IntradayBacktest:
                 if sd:
                     sd_range = (ce_price+pe_price)*sd
                     
-                    if roundoff:
+                    if SDroundoff:
                         sd_range = round(sd_range/self.gap)*self.gap
                     else:
                         sd_range = max(self.gap, round(sd_range/self.gap)*self.gap)
+
                     ce_scrip, pe_scrip = f"{int(ce_scrip[:-2]) + sd_range}CE", f"{int(pe_scrip[:-2]) - sd_range}PE"
                     ce_price, pe_price = self.options_data.loc[(start_dt,ce_scrip),'close'], self.options_data.loc[(start_dt,pe_scrip),'close']
                 
@@ -934,9 +937,10 @@ class WeeklyBacktest(IntradayBacktest):
         self.future_data = pd.concat([pd.read_pickle(self.__future_pickle_path.format(date=current_date.date())) for current_date in self.current_week_dates])
         self.future_data.sort_values(by='date_time', inplace=True)
         self.future_data.set_index('date_time', inplace=True)
-        
+        self.future_data = self.future_data[["open", "high", "low", "close"]]
         self.options = pd.concat([pd.read_pickle(self.__option_pickle_path.format(date=current_date.date())) for current_date in self.current_week_dates])
         self.options = self.options[(self.options['date_time'].dt.time >= start_time) & (self.options['date_time'].dt.time <= end_time)]
+        self.options = self.options[["scrip", "date_time", "open", "high", "low", "close"]]
         self.options_data = self.options.set_index(['date_time', 'scrip'])
         self.gap = self.get_gap()
         
@@ -970,7 +974,7 @@ class WeeklyBacktest(IntradayBacktest):
         else:
             return lower_range, upper_range
         
-    def get_straddle_strike(self, start_dt, end_dt, sd=0):
+    def get_straddle_strike(self, start_dt, end_dt, sd=0, SDroundoff=False):
         while start_dt < end_dt:
             try:
                 # find strike nearest to future price
@@ -1002,13 +1006,18 @@ class WeeklyBacktest(IntradayBacktest):
                         
                 # Required scrip and their price
                 ce_scrip, pe_scrip = ce_scrip_list[scrip_index], pe_scrip_list[scrip_index]
+                ce_price, pe_price = self.options_data.loc[(start_dt,ce_scrip),'close'], self.options_data.loc[(start_dt,pe_scrip),'close']
         
                 if sd:
                     sd_range = (ce_price+pe_price)*sd
-                    sd_range = max(self.gap, round(sd_range/self.gap)*self.gap)
-                    ce_scrip, pe_scrip = f"{int(ce_scrip[:-2]) + sd_range}CE", f"{int(pe_scrip[:-2]) - sd_range}PE"
+                    
+                    if SDroundoff:
+                        sd_range = round(sd_range/self.gap)*self.gap
+                    else:
+                        sd_range = max(self.gap, round(sd_range/self.gap)*self.gap)
 
-                ce_price, pe_price = self.options_data.loc[(start_dt,ce_scrip),'close'], self.options_data.loc[(start_dt,pe_scrip),'close']
+                    ce_scrip, pe_scrip = f"{int(ce_scrip[:-2]) + sd_range}CE", f"{int(pe_scrip[:-2]) - sd_range}PE"
+                    ce_price, pe_price = self.options_data.loc[(start_dt,ce_scrip),'close'], self.options_data.loc[(start_dt,pe_scrip),'close']
                 
                 return ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt
             except (IndexError, KeyError, ValueError, TypeError):

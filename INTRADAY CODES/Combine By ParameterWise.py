@@ -16,63 +16,83 @@ def print_heading(title="🗂 Folder Selection & Configuration"):
 
 print_heading()
 
-def list_and_select_directory():
-    folders = [f for f in os.listdir('.') if os.path.isdir(f) and '.ipynb' not in f]
-    if not folders:
-        return print("No folders found.")
-
-    for i, f in enumerate(folders, 1):
-        print(f"{i}. {f}")
-    
+def list_and_select_directory(current_path='.'):
     while True:
-        try:
-            idx = int(input("Pls Select Code: "))
-            if 1 <= idx <= len(folders):
-                print(f"\nSelected Code : {folders[idx - 1]}")
-                return folders[idx - 1]
-        except ValueError:
-            pass
-        print("Invalid input. Try again.")
+        # List directories, excluding .ipynb
+        folders = [f for f in os.listdir(current_path) if os.path.isdir(os.path.join(current_path, f)) and '.ipynb' not in f and 'dashboard' not in f]
+        
+        # If no folders, return current path
+        if not folders:
+            return current_path
+
+        # Display folders
+        for i, f in enumerate(folders, 1):
+            print(f"{i}. {f}")
+        
+        # Get user selection
+        while True:
+            try:
+                idx = int(input("Pls Select Code: "))
+                if 1 <= idx <= len(folders):
+                    selected_folder = folders[idx - 1]
+                    print(f"\nSelected Code: {selected_folder}")
+                    # Update path and continue
+                    current_path = os.path.join(current_path, selected_folder)
+                    break
+            except ValueError:
+                pass
+            print("Invalid input. Try again.")
         
 def get_bool_input(prompt):
     return input(f"{prompt} (y/n): ").strip().lower() == 'y'
 
-code = list_and_select_directory()
+def get_parquet_files(folder_path):
+    EXT = "*.parquet"
+    return [file for path, subdir, files in os.walk(folder_path) for file in glob(os.path.join(path, EXT))]
+
+def get_code_index_cols(parquet_files):
+    code = parquet_files[0].split('\\')[-1].split(' ')[2]
+    indices = sorted(set([f.split('\\')[-1].split(' ')[0] for f in parquet_files]))
+    
+    df = pd.read_parquet(max(parquet_files, key=lambda f: os.path.getsize(f)))
+    name_columns = [c for c in list(df.columns) if c.startswith('P_')]
+    pnl_columns = [c for c in list(df.columns) if c.endswith('PNL')]
+    return code, indices, name_columns, pnl_columns
+
+parquet_files_folder_path = list_and_select_directory()
 only_mtm_col = get_bool_input("Grouping with MTM columns only?")
 use_polars = get_bool_input("Use Polars (fastest) instead of (Pandas/Dask)?")
-files_folder_path = f"{code}/{code}_output/"
-combine_folder_path = f"{code}/{code}_output_ParameterWise/"
-os.makedirs(combine_folder_path, exist_ok=True)
 
-EXT = "*.parquet"
-all_files = [file for path, subdir, files in os.walk(files_folder_path) for file in glob(os.path.join(path, EXT))]
-indices = sorted(set([f.split('\\')[-1].split(' ')[0] for f in all_files]))
-os.makedirs(combine_folder_path, exist_ok=True)
+parquet_files = get_parquet_files(parquet_files_folder_path)
+if parquet_files:
+    code, indices, name_columns, pnl_columns = get_code_index_cols(parquet_files)
+    print()
+    print(f"Total File Uploaded :- {len(parquet_files)}")
+    print(f"Code :- {code}")
+    print(f"Indices :- {indices}")
+    print(f"Parameter cols :- {', '.join(name_columns)}")
+    print(f"PNL cols :- {', '.join(pnl_columns)}")
+    print('Use Polars :-', use_polars)
+else:
+    print("No Parquet files found in the provided folder path.")
+    input("\nPress Enter to Exit !!!")
 
-print()
-print('Code -', code)
-print('Only MTM Col-', only_mtm_col)
-print('Use Polars-', use_polars)
-print('Number of Files -', len(all_files))
-print('Indices -', indices)
-print()
+combine_folder_path = parquet_files_folder_path.replace('_output', '_output_ParameterWise')
+os.makedirs(combine_folder_path, exist_ok=True)
 
 if input("Proceed with execution? (y/n): ").strip().lower() != 'y':
     print('❌ Execution cancelled.')
     sleep(2)
     sys.exit(0)
 
-df = pd.read_parquet(max(all_files, key=lambda f: os.path.getsize(f)))
-name_columns = [c for c in list(df.columns) if c.startswith('P_')]
-pnl_columns = [c for c in list(df.columns) if c.endswith('PNL')]
-print('Name cols-', list(map(lambda x: x.replace('P_', ''), name_columns)))
-if only_mtm_col: print('\nPNL cols-', pnl_columns)
+print()
+print('Building ParameterWise Files... \n')
 
 for index in indices:
-    chunk_nos = sorted(set([k.split('-')[-1].split('.')[0] for k in glob(f'{files_folder_path}/{index}*')]))
+    chunk_nos = sorted(set([k.split('-')[-1].split('.')[0] for k in glob(f'{parquet_files_folder_path}/{index}*')]))
     for chunk_no in chunk_nos:
         try:
-            all_files = glob(f'{files_folder_path}/{index}*No-{chunk_no}.parquet')
+            all_files = glob(f'{parquet_files_folder_path}/{index}*No-{chunk_no}.parquet')
             print(f'\nTotal file in {index} Chunks-{chunk_no} -', len(all_files))
             if len(all_files) == 0:continue
 
@@ -84,7 +104,7 @@ for index in indices:
                 df = df.compute()
             print('Reading Complete...')
 
-            os.makedirs(f"{combine_folder_path}{index}", exist_ok=True)
+            os.makedirs(f"{combine_folder_path}/{index}", exist_ok=True)
             print('Grouping Chunks...')
             if use_polars:
                 grouped = df.group_by(name_columns)
@@ -96,9 +116,9 @@ for index in indices:
                 try:
                     file_name = ' '.join(map(str, idx)).replace(":00 ", " ").replace(":", "") + '.parquet'
                     if use_polars:
-                        data.write_parquet(f"{combine_folder_path}{index}/{file_name}")
+                        data.write_parquet(f"{combine_folder_path}/{index}/{file_name}")
                     else:
-                        data.to_parquet(f"{combine_folder_path}{index}/{file_name}", index=False)
+                        data.to_parquet(f"{combine_folder_path}/{index}/{file_name}", index=False)
                 except Exception as e:
                     print(e)
 

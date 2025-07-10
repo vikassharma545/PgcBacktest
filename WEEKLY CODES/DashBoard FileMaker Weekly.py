@@ -66,7 +66,7 @@ def get_code_index_cols(parquet_files):
 
 def get_year_dte_files(parquet_files):
     year_dte_files = {}
-    for file in all_files:
+    for file in parquet_files:
         index = file.split('\\')[-1].split(' ')[0]
         date = datetime.datetime.strptime(file.split('\\')[-1].split(' ')[1], "%Y-%m-%d")
         year = date.year
@@ -96,7 +96,7 @@ max_row = 500000
 dashboard_folder_path = parquet_files_folder_path.replace('_output', '_dashboard')
 dte_file = pd.read_csv(f"C:/PICKLE/DTE.csv", parse_dates=['Date'], dayfirst=True).set_index("Date")
 os.makedirs(dashboard_folder_path, exist_ok=True)
-year_day_dte_files = get_year_dte_files(parquet_files)
+year_dte_files = get_year_dte_files(parquet_files)
 
 if input("Proceed with execution? (y/n): ").strip().lower() != 'y':
     print('❌ Execution cancelled.')

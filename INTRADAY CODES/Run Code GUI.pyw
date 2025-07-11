@@ -21,17 +21,20 @@ from pgcbacktest.BtParameters import * # Changed to wildcard import
 from pgcbacktest.BacktestOptions import * # Changed to wildcard import
 
 # --- Notebook to Script Converter ---
-def convert_notebook_to_script(notebook_path, script_path, temp_meta_data_path, update_status_callback):
+def convert_notebook_to_script(notebook_path, script_path, temp_meta_data_path, actual_parameter_csv_path, update_status_callback):
     """
     Converts a Jupyter notebook (.ipynb) to a Python script (.py).
-    It also updates the 'meta_data_path' and extracts 'code' and 'output_csv_path'
-    variables within the notebook's code cells if they exist.
+    It also updates the 'meta_data_path' and 'parameter_csv_path',
+    and extracts 'code' and 'output_csv_path' variables within the
+    notebook's code cells if they exist.
 
     Args:
         notebook_path (str): The path to the input Jupyter notebook file.
         script_path (str): The path where the output Python script will be saved.
         temp_meta_data_path (str): The temporary path for the metadata CSV file
                                    to be injected into the notebook script.
+        actual_parameter_csv_path (str): The absolute path to the parameter CSV file,
+                                         to be injected into the notebook script.
         update_status_callback (callable): A callback function to update the GUI status.
 
     Returns:
@@ -48,21 +51,27 @@ def convert_notebook_to_script(notebook_path, script_path, temp_meta_data_path, 
         code_val = ""
         output_csv_path_val = ""
 
-        if temp_meta_data_path:
-            for cell_idx, cell in enumerate(nb_content['cells']):
-                if (cell['cell_type'] == 'code') and ("meta_data_path" in cell['source']):
-                    source = cell['source'].splitlines()
-                    for idx, value in enumerate(source):
-                        if "meta_data_path =" in value:
-                            source[idx] = f"meta_data_path = r'{temp_meta_data_path}'"
-                        if "output_csv_path =" in value:
-                            output_csv_path_val = value.split("=")[-1].strip()
-                            output_csv_path_val = re.search(r'[\'"](.*?)[\'"]', output_csv_path_val).group(1).replace('\\\\', '\\')
-                        if "code =" in value:
-                            code_val = value.split("=")[-1].strip()
-                            code_val = re.search(r'[\'"](.*?)[\'"]', code_val).group(1)
-
-                    nb_content['cells'][cell_idx]['source'] = '\n'.join(source)
+        # Iterate through cells to modify paths and extract values
+        for cell_idx, cell in enumerate(nb_content['cells']):
+            if cell['cell_type'] == 'code':
+                source_lines = cell['source'].splitlines()
+                updated_source_lines = []
+                for line in source_lines:
+                    if "meta_data_path =" in line:
+                        updated_source_lines.append(f"meta_data_path = r'{temp_meta_data_path}'")
+                    elif "parameter_csv_path =" in line: # NEW: Inject actual_parameter_csv_path
+                        updated_source_lines.append(f"parameter_csv_path = r'{actual_parameter_csv_path}'")
+                    elif "output_csv_path =" in line:
+                        output_csv_path_val = line.split("=")[-1].strip()
+                        output_csv_path_val = re.search(r'[\'"](.*?)[\'"]', output_csv_path_val).group(1).replace('\\\\', '\\')
+                        updated_source_lines.append(line) # Keep the original line, just extract the value
+                    elif "code =" in line:
+                        code_val = line.split("=")[-1].strip()
+                        code_val = re.search(r'[\'"](.*?)[\'"]', code_val).group(1)
+                        updated_source_lines.append(line) # Keep the original line, just extract the value
+                    else:
+                        updated_source_lines.append(line)
+                nb_content['cells'][cell_idx]['source'] = '\n'.join(updated_source_lines)
 
         script, _ = PythonExporter().from_notebook_node(nb_content)
         with open(script_path, 'w', encoding='utf-8') as py_file:
@@ -319,6 +328,7 @@ class App:
         self.terminals_allowed_str.set(f"⚙️ Terminals Allowed: {terminals_allowed}")
         self.terminals_running_str.set(f"🏃 Terminals Running: {terminals_running}")
 
+
     def browse_file(self, var, file_extension):
         """
         Opens a file dialog for the user to select a file and updates the associated StringVar.
@@ -395,6 +405,7 @@ class App:
         self.update_monitoring_labels(0, 0, 0, current_terminals_allowed, 0)
         self._set_button_states(False) # Enable Run, Disable Stop
 
+
     def on_closing(self):
         """
         Handles the window closing event, prompting the user to confirm stopping processes.
@@ -424,7 +435,14 @@ class App:
             else:
                 self.parameter_meta_data_for_run = os.path.join(self.cache_path, os.path.basename(parameter_meta_data))
 
-            code, self.output_csv_path = convert_notebook_to_script(jupyter_code, self.script_output, self.parameter_meta_data_for_run, self.update_status_text)
+            # NEW: Pass actual_parameter_csv_path to the conversion function
+            code, self.output_csv_path = convert_notebook_to_script(
+                jupyter_code,
+                self.script_output,
+                self.parameter_meta_data_for_run,
+                parameter_csv, # This is the new argument being passed
+                self.update_status_text
+            )
             if not code:
                 self.update_status_text("Failed to convert notebook or extract code/output path. Stopping.")
                 self.running = False
@@ -463,6 +481,7 @@ class App:
                     # Update the monitoring labels
                     self.update_monitoring_labels(mem_usage, cpu_usage, total_pending_dates, no_of_terminal_allowed, no_of_terminal_running)
 
+
                     df_current_meta = pd.read_csv(self.parameter_meta_data_for_run) # Reload to get latest state
                     
                     # Check and restart finished processes if they have pending work
@@ -482,7 +501,8 @@ class App:
 
                                 if pending_files_for_proc:
                                     self.update_status_text(f"Process for row {proc_row_idx} finished but has pending dates. Restarting...")
-                                    new_proc = subprocess.Popen([self.python_path, self.script_output, "-r", str(proc_row_idx)], creationflags=subprocess.CREATE_NEW_CONSOLE)
+                                    # Pass `cwd` to ensure the new process also starts in the correct directory
+                                    new_proc = subprocess.Popen([self.python_path, self.script_output, "-r", str(proc_row_idx)], creationflags=subprocess.CREATE_NEW_CONSOLE, cwd=os.path.dirname(self.parameter_csv_path.get()))
                                     self.processes[i] = new_proc # Replace the old process with the new one
                                     time.sleep(1) # Small delay
                                 else:
@@ -680,6 +700,8 @@ class App:
     def start_subprocesses(self, code):
         """
         Starts subprocesses based on the generated temporary metadata file.
+        Each subprocess's current working directory will be set to the directory
+        of the selected parameter CSV file.
 
         Args:
             code (str): The 'code' identifier from the notebook.
@@ -692,6 +714,12 @@ class App:
                 self.running = False
                 return
 
+            # Determine the current working directory for the subprocess
+            subprocess_cwd = os.path.dirname(self.parameter_csv_path.get())
+            if not os.path.isdir(subprocess_cwd):
+                self.update_status_text(f"Warning: Directory for parameter CSV not found: {subprocess_cwd}. Subprocesses might not find relative paths.")
+                subprocess_cwd = None # Let Popen use default if path is invalid
+
             for idx, row in df.iterrows():
                 # Ensure 'run' column exists and is boolean
                 if 'run' not in row or not row['run']:
@@ -699,7 +727,10 @@ class App:
 
                 self.update_status_text(f"Running Row {idx}: {self.code_base}")
                 # Pass the row index to the subprocess so it knows which part of the metadata to use
-                proc = subprocess.Popen([self.python_path, self.script_output, "-r", str(idx)], creationflags=subprocess.CREATE_NEW_CONSOLE)
+                # Added 'cwd=subprocess_cwd' to set the working directory for the subprocess
+                proc = subprocess.Popen([self.python_path, self.script_output, "-r", str(idx)],
+                                        creationflags=subprocess.CREATE_NEW_CONSOLE,
+                                        cwd=subprocess_cwd) # Set the working directory
                 self.processes.append(proc)
                 time.sleep(1) # Small delay to avoid overwhelming the system
         except FileNotFoundError:

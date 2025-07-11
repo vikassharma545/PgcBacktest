@@ -284,7 +284,7 @@ class IntradayBacktest:
 
         return None, None, None, None, None, None
 
-    def _get_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1, only=None, obove_target_only=False, roundoff=False):
+    def _get_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1, only=None, obove_target_only=False, SDroundoff=False):
         
         if '%' in str(om) or obove_target_only:
             
@@ -305,7 +305,7 @@ class IntradayBacktest:
                 om = float(om) if om else om
 
             if (om is None or om <= 0) and target is None:
-                ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_straddle_strike(start_dt, end_dt, sd=sd, roundoff=roundoff)
+                ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_straddle_strike(start_dt, end_dt, sd=sd, SDroundoff=SDroundoff)
             else:
                 ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_strangle_strike(start_dt, end_dt, om=om, target=target, check_inverted=check_inverted, tf=tf)
                 
@@ -1142,21 +1142,56 @@ class WeeklyBacktest(IntradayBacktest):
                 if start_dt.time() > datetime.time(15, 29): break
                 
         return None, None, None, None, None, None
+    
+    def get_ut_strike(self, start_dt, end_dt, om=None, target=None):
+        while start_dt < end_dt:
+            try:
+                future_price = self.future_data.loc[start_dt,'close']
+                step = self.STEPS[self.index.lower()]
+                target = ((int(future_price/step)*step)/100*om) if target is None else target
+                target_od = self.options[(self.options['date_time'] == start_dt) & (self.options['close'] >= target)].sort_values(by=['close']).copy()
+                
+                ce_scrip = target_od.loc[target_od['scrip'].str.endswith('CE'), 'scrip'].iloc[0]
+                pe_scrip = target_od.loc[target_od['scrip'].str.endswith('PE'), 'scrip'].iloc[0]
+                
+                ce_price, pe_price = self.options_data.loc[(start_dt, ce_scrip),'close'], self.options_data.loc[(start_dt, pe_scrip),'close']
 
-    def _get_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1, only=None):
+                return ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt
+            except (IndexError, KeyError, ValueError, TypeError):
+                start_dt += datetime.timedelta(minutes = 1)
+                if start_dt.time() > datetime.time(15, 29): break
+                
+            except Exception as e:
+                print('get_straddle_strike', e)
+                traceback.print_exc()
+                start_dt += datetime.timedelta(minutes = 1)
+                if start_dt.time() > datetime.time(15, 29): break
+
+    def _get_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1, only=None, obove_target_only=False, SDroundoff=False):
         
-        if 'SD' in str(om).upper():
-            sd = float(om.upper().replace(' ', '').replace('SD', ''))
-            om = None
-        else:
-            sd = 0
-            om = float(om) if om else om
-
-        if (om is None or om <= 0) and target is None:
-            ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_straddle_strike(start_dt, end_dt, sd=sd)
-        else:
-            ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_strangle_strike(start_dt, end_dt, om=om, target=target, check_inverted=check_inverted, tf=tf)
+        if '%' in str(om) or obove_target_only:
             
+            if '%' in str(om):
+                om_precent = float(om.replace('%', ''))
+                future_price = self.future_data['close'].iloc[0]
+                step = self.STEPS[self.index.lower()]
+                one_om =  ((int(future_price/step)*step)/100)
+                target = one_om*om_precent/100
+
+            ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_ut_strike(start_dt, end_dt, om=om, target=target)  
+        else:
+            if 'SD' in str(om).upper():
+                sd = float(om.upper().replace(' ', '').replace('SD', ''))
+                om = None
+            else:
+                sd = 0
+                om = float(om) if om else om
+
+            if (om is None or om <= 0) and target is None:
+                ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_straddle_strike(start_dt, end_dt, sd=sd, SDroundoff=SDroundoff)
+            else:
+                ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_strangle_strike(start_dt, end_dt, om=om, target=target, check_inverted=check_inverted, tf=tf)
+                
         if only is None:
             return ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt
         else:

@@ -113,50 +113,27 @@ class IntradayBacktest:
         else:
             straddle_data = pd.DataFrame()
             straddle_data['date_time'] = ce_data['date_time']
-            straddle_data['high'] = np.maximum(ce_data['high']+pe_data['low'], ce_data['low']+pe_data['high'])
-            straddle_data['low'] = np.minimum(ce_data['high']+pe_data['low'], ce_data['low']+pe_data['high'])
-            straddle_data['close'] = ce_data['close'] + pe_data['close']
-            return straddle_data
 
-    def get_single_leg_data_no_backup(self, start_dt, end_dt, scrip):
-        
-        t_start_dt = datetime.datetime.combine(self.current_date, datetime.time(9,15))
-        t_end_dt = datetime.datetime.combine(self.current_date, datetime.time(15,30))
-        
-        data = self.get_single_leg_data(t_start_dt, t_end_dt, scrip)
-        data = data[(data['date_time'] >= start_dt) & (data['date_time'] <= end_dt)].copy()
-        return data.reset_index(drop=True)
-    
-    def get_straddle_data_no_backup(self, start_dt, end_dt, ce_scrip, pe_scrip, seperate=False):
-
-        ce_data = self.get_single_leg_data_no_backup(start_dt, end_dt, ce_scrip).copy()
-        pe_data = self.get_single_leg_data_no_backup(start_dt, end_dt, pe_scrip).copy()
-        
-        ce_data = ce_data[ce_data['date_time'].isin(pe_data['date_time'])]
-        pe_data = pe_data[pe_data['date_time'].isin(ce_data['date_time'])]
-
-        ce_data.sort_values(by='date_time', ignore_index=True, inplace=True)
-        pe_data.sort_values(by='date_time', ignore_index=True, inplace=True)
-        
-        if seperate:
-            return ce_data, pe_data
-        else:
-            straddle_data = pd.DataFrame()
-            straddle_data['date_time'] = ce_data['date_time']
-            straddle_data['high'] = np.maximum(ce_data['high']+pe_data['low'], ce_data['low']+pe_data['high'])
-            straddle_data['low'] = np.minimum(ce_data['high']+pe_data['low'], ce_data['low']+pe_data['high'])
-            straddle_data['close'] = ce_data['close'] + pe_data['close']
+            ce_high, ce_low, ce_close = ce_data['high'].to_numpy(), ce_data['low'].to_numpy(), ce_data['close'].to_numpy()
+            pe_high, pe_low, pe_close = pe_data['high'].to_numpy(), pe_data['low'].to_numpy(), pe_data['close'].to_numpy()
+                        
+            straddle_data['high'] = np.maximum(ce_high + pe_low, ce_low + pe_high)
+            straddle_data['low'] = np.minimum(ce_high + pe_low, ce_low + pe_high)
+            straddle_data['close'] = ce_close + pe_close
+            
             return straddle_data
 
     def get_straddle_strike(self, start_dt, end_dt, sd=0, SDroundoff=False):
-        while start_dt < end_dt:
+
+        valid_times = self.future_data.loc[start_dt:end_dt].index
+        for current_dt in valid_times:
             try:
                 # find strike nearest to future price
-                future_price = self.future_data.loc[start_dt,'close']
+                future_price = self.future_data.loc[current_dt,'close']
                 round_future_price = round(future_price/self.gap)*self.gap
 
                 ce_scrip, pe_scrip = f"{round_future_price}CE", f"{round_future_price}PE"
-                ce_price, pe_price = self.options_data.loc[(start_dt, ce_scrip),'close'], self.options_data.loc[(start_dt, pe_scrip),'close']
+                ce_price, pe_price = self.options_data.loc[(current_dt, ce_scrip),'close'], self.options_data.loc[(current_dt, pe_scrip),'close']
                 
                 # Synthetic future
                 syn_future = ce_price - pe_price + round_future_price
@@ -169,8 +146,8 @@ class IntradayBacktest:
                 scrip_index, min_value = None, float("inf")
                 for i in range(3):
                     try:
-                        ce_price = self.options_data.loc[(start_dt,ce_scrip_list[i]),'close']
-                        pe_price = self.options_data.loc[(start_dt,pe_scrip_list[i]),'close']
+                        ce_price = self.options_data.loc[(current_dt,ce_scrip_list[i]),'close']
+                        pe_price = self.options_data.loc[(current_dt,pe_scrip_list[i]),'close']
                         diff = abs(ce_price-pe_price)
                         if min_value > diff:
                             min_value = diff
@@ -180,7 +157,7 @@ class IntradayBacktest:
                         
                 # Required scrip and their price
                 ce_scrip, pe_scrip = ce_scrip_list[scrip_index], pe_scrip_list[scrip_index]
-                ce_price, pe_price = self.options_data.loc[(start_dt,ce_scrip),'close'], self.options_data.loc[(start_dt,pe_scrip),'close']
+                ce_price, pe_price = self.options_data.loc[(current_dt,ce_scrip),'close'], self.options_data.loc[(current_dt,pe_scrip),'close']
         
                 if sd:
                     sd_range = (ce_price+pe_price)*sd
@@ -191,25 +168,27 @@ class IntradayBacktest:
                         sd_range = max(self.gap, round(sd_range/self.gap)*self.gap)
 
                     ce_scrip, pe_scrip = f"{int(ce_scrip[:-2]) + sd_range}CE", f"{int(pe_scrip[:-2]) - sd_range}PE"
-                    ce_price, pe_price = self.options_data.loc[(start_dt,ce_scrip),'close'], self.options_data.loc[(start_dt,pe_scrip),'close']
+                    ce_price, pe_price = self.options_data.loc[(current_dt,ce_scrip),'close'], self.options_data.loc[(current_dt,pe_scrip),'close']
                 
-                return ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt
+                return ce_scrip, pe_scrip, ce_price, pe_price, future_price, current_dt
             except (IndexError, KeyError, ValueError, TypeError):
-                start_dt += datetime.timedelta(minutes = 1)
+                continue
             except Exception as e:
                 print('get_straddle_strike', e)
                 traceback.print_exc()
-                start_dt += datetime.timedelta(minutes = 1)
+                continue
 
         return None, None, None, None, None, None
 
     def get_strangle_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1):
-        while start_dt < end_dt:
+
+        valid_times = self.future_data.loc[start_dt:end_dt].index
+        for current_dt in valid_times:
             try:
-                future_price = self.future_data.loc[start_dt,'close']
+                future_price = self.future_data.loc[current_dt,'close']
                 step = self.STEPS[self.index.lower()]
                 target = ((int(future_price/step)*step)/100*om) if target is None else target
-                target_od = self.options[(self.options['date_time'] == start_dt) & (self.options['close'] >= target * tf)].sort_values(by=['close']).copy()
+                target_od = self.options[(self.options['date_time'] == current_dt) & (self.options['close'] >= target * tf)].sort_values(by=['close']).copy()
                 
                 ce_scrip = target_od.loc[target_od['scrip'].str.endswith('CE'), 'scrip'].iloc[0]
                 pe_scrip = target_od.loc[target_od['scrip'].str.endswith('PE'), 'scrip'].iloc[0]
@@ -220,11 +199,11 @@ class IntradayBacktest:
                 call_list_prices, put_list_prices = [], []
                 for z in range(3):
                     try:
-                        call_list_prices.append(self.options_data.loc[(start_dt, ce_scrip_list[z]), 'close'])
+                        call_list_prices.append(self.options_data.loc[(current_dt, ce_scrip_list[z]), 'close'])
                     except:
                         call_list_prices.append(0)
                     try:
-                        put_list_prices.append(self.options_data.loc[(start_dt, pe_scrip_list[z]), 'close'])
+                        put_list_prices.append(self.options_data.loc[(current_dt, pe_scrip_list[z]), 'close'])
                     except:
                         put_list_prices.append(0)
                 
@@ -246,42 +225,44 @@ class IntradayBacktest:
                         required_call, required_put = call_list_prices[i], put
 
                 ce_scrip, pe_scrip = ce_scrip_list[call_list_prices.index(required_call)], pe_scrip_list[put_list_prices.index(required_put)]
-                ce_price, pe_price = self.options_data.loc[(start_dt, ce_scrip), 'close'], self.options_data.loc[(start_dt, pe_scrip), 'close']
+                ce_price, pe_price = self.options_data.loc[(current_dt, ce_scrip), 'close'], self.options_data.loc[(current_dt, pe_scrip), 'close']
                 
                 if int(ce_scrip[:-2]) < int(pe_scrip[:-2]) and check_inverted:
-                    return self.get_straddle_strike(start_dt)
+                    return self.get_straddle_strike(current_dt)
                 else:
-                    return ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt
+                    return ce_scrip, pe_scrip, ce_price, pe_price, future_price, current_dt
             except (IndexError, KeyError, ValueError, TypeError):
-                start_dt += datetime.timedelta(minutes = 1)
+                continue
             except Exception as e:
                 print('get_straddle_strike', e)
                 traceback.print_exc()
-                start_dt += datetime.timedelta(minutes = 1)
-                
+                continue
+                                
         return None, None, None, None, None, None
     
     def get_ut_strike(self, start_dt, end_dt, om=None, target=None):
-        while start_dt < end_dt:
+
+        valid_times = self.future_data.loc[start_dt:end_dt].index
+        for current_dt in valid_times:
             try:
-                future_price = self.future_data.loc[start_dt,'close']
+                future_price = self.future_data.loc[current_dt,'close']
                 step = self.STEPS[self.index.lower()]
                 target = ((int(future_price/step)*step)/100*om) if target is None else target
-                target_od = self.options[(self.options['date_time'] == start_dt) & (self.options['close'] >= target)].sort_values(by=['close']).copy()
+                target_od = self.options[(self.options['date_time'] == current_dt) & (self.options['close'] >= target)].sort_values(by=['close']).copy()
                 
                 ce_scrip = target_od.loc[target_od['scrip'].str.endswith('CE'), 'scrip'].iloc[0]
                 pe_scrip = target_od.loc[target_od['scrip'].str.endswith('PE'), 'scrip'].iloc[0]
                 
-                ce_price, pe_price = self.options_data.loc[(start_dt, ce_scrip),'close'], self.options_data.loc[(start_dt, pe_scrip),'close']
+                ce_price, pe_price = self.options_data.loc[(current_dt, ce_scrip),'close'], self.options_data.loc[(current_dt, pe_scrip),'close']
 
-                return ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt
+                return ce_scrip, pe_scrip, ce_price, pe_price, future_price, current_dt
             except (IndexError, KeyError, ValueError, TypeError):
-                start_dt += datetime.timedelta(minutes = 1)
+                continue
             except Exception as e:
                 print('get_straddle_strike', e)
                 traceback.print_exc()
-                start_dt += datetime.timedelta(minutes = 1)
-
+                continue
+            
         return None, None, None, None, None, None
 
     def _get_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1, only=None, obove_target_only=False, SDroundoff=False):
@@ -975,14 +956,17 @@ class WeeklyBacktest(IntradayBacktest):
             return lower_range, upper_range
         
     def get_straddle_strike(self, start_dt, end_dt, sd=0, SDroundoff=False):
-        while start_dt < end_dt:
+
+        current_date = start_dt.date()
+        valid_times = self.future_data.loc[start_dt:end_dt].index
+        for current_dt in valid_times:
             try:
                 # find strike nearest to future price
-                future_price = self.future_data.loc[start_dt,'close']
+                future_price = self.future_data.loc[current_dt,'close']
                 round_future_price = round(future_price/self.gap)*self.gap
 
                 ce_scrip, pe_scrip = f"{round_future_price}CE", f"{round_future_price}PE"
-                ce_price, pe_price = self.options_data.loc[(start_dt, ce_scrip),'close'], self.options_data.loc[(start_dt, pe_scrip),'close']
+                ce_price, pe_price = self.options_data.loc[(current_dt, ce_scrip),'close'], self.options_data.loc[(current_dt, pe_scrip),'close']
                 
                 # Synthetic future
                 syn_future = ce_price - pe_price + round_future_price
@@ -995,8 +979,8 @@ class WeeklyBacktest(IntradayBacktest):
                 scrip_index, min_value = None, float("inf")
                 for i in range(3):
                     try:
-                        ce_price = self.options_data.loc[(start_dt,ce_scrip_list[i]),'close']
-                        pe_price = self.options_data.loc[(start_dt,pe_scrip_list[i]),'close']
+                        ce_price = self.options_data.loc[(current_dt,ce_scrip_list[i]),'close']
+                        pe_price = self.options_data.loc[(current_dt,pe_scrip_list[i]),'close']
                         diff = abs(ce_price-pe_price)
                         if min_value > diff:
                             min_value = diff
@@ -1006,7 +990,7 @@ class WeeklyBacktest(IntradayBacktest):
                         
                 # Required scrip and their price
                 ce_scrip, pe_scrip = ce_scrip_list[scrip_index], pe_scrip_list[scrip_index]
-                ce_price, pe_price = self.options_data.loc[(start_dt,ce_scrip),'close'], self.options_data.loc[(start_dt,pe_scrip),'close']
+                ce_price, pe_price = self.options_data.loc[(current_dt,ce_scrip),'close'], self.options_data.loc[(current_dt,pe_scrip),'close']
         
                 if sd:
                     sd_range = (ce_price+pe_price)*sd
@@ -1017,18 +1001,15 @@ class WeeklyBacktest(IntradayBacktest):
                         sd_range = max(self.gap, round(sd_range/self.gap)*self.gap)
 
                     ce_scrip, pe_scrip = f"{int(ce_scrip[:-2]) + sd_range}CE", f"{int(pe_scrip[:-2]) - sd_range}PE"
-                    ce_price, pe_price = self.options_data.loc[(start_dt,ce_scrip),'close'], self.options_data.loc[(start_dt,pe_scrip),'close']
+                    ce_price, pe_price = self.options_data.loc[(current_dt,ce_scrip),'close'], self.options_data.loc[(current_dt,pe_scrip),'close']
                 
-                return ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt
+                return ce_scrip, pe_scrip, ce_price, pe_price, future_price, current_dt
             except (IndexError, KeyError, ValueError, TypeError):
-                start_dt += datetime.timedelta(minutes = 1) 
-                if start_dt.time() > datetime.time(15, 29): break
-                
+                if current_dt.date() != current_date: break
             except Exception as e:
                 print('get_straddle_strike', e)
                 traceback.print_exc()
-                start_dt += datetime.timedelta(minutes = 1)
-                if start_dt.time() > datetime.time(15, 29): break
+                if current_dt.date() != current_date: break
 
         return None, None, None, None, None, None
     
@@ -1083,12 +1064,15 @@ class WeeklyBacktest(IntradayBacktest):
         return None, None, None, None, None, None
 
     def get_strangle_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1):
-        while start_dt < end_dt:
+
+        current_date = start_dt.date()
+        valid_times = self.future_data.loc[start_dt:end_dt].index
+        for current_dt in valid_times:
             try:
-                future_price = self.future_data.loc[start_dt,'close']
+                future_price = self.future_data.loc[current_dt,'close']
                 step = self.STEPS[self.index.lower()]
                 target = ((int(future_price/step)*step)/100*om) if target is None else target
-                target_od = self.options[(self.options['date_time'] == start_dt) & (self.options['close'] >= target * tf)].sort_values(by=['close']).copy()
+                target_od = self.options[(self.options['date_time'] == current_dt) & (self.options['close'] >= target * tf)].sort_values(by=['close']).copy()
                 
                 ce_scrip = target_od.loc[target_od['scrip'].str.endswith('CE'), 'scrip'].iloc[0]
                 pe_scrip = target_od.loc[target_od['scrip'].str.endswith('PE'), 'scrip'].iloc[0]
@@ -1099,11 +1083,11 @@ class WeeklyBacktest(IntradayBacktest):
                 call_list_prices, put_list_prices = [], []
                 for z in range(3):
                     try:
-                        call_list_prices.append(self.options_data.loc[(start_dt, ce_scrip_list[z]), 'close'])
+                        call_list_prices.append(self.options_data.loc[(current_dt, ce_scrip_list[z]), 'close'])
                     except:
                         call_list_prices.append(0)
                     try:
-                        put_list_prices.append(self.options_data.loc[(start_dt, pe_scrip_list[z]), 'close'])
+                        put_list_prices.append(self.options_data.loc[(current_dt, pe_scrip_list[z]), 'close'])
                     except:
                         put_list_prices.append(0)
                 
@@ -1125,47 +1109,44 @@ class WeeklyBacktest(IntradayBacktest):
                         required_call, required_put = call_list_prices[i], put
 
                 ce_scrip, pe_scrip = ce_scrip_list[call_list_prices.index(required_call)], pe_scrip_list[put_list_prices.index(required_put)]
-                ce_price, pe_price = self.options_data.loc[(start_dt, ce_scrip), 'close'], self.options_data.loc[(start_dt, pe_scrip), 'close']
+                ce_price, pe_price = self.options_data.loc[(current_dt, ce_scrip), 'close'], self.options_data.loc[(current_dt, pe_scrip), 'close']
                 
                 if int(ce_scrip[:-2]) < int(pe_scrip[:-2]) and check_inverted:
-                    return self.get_straddle_strike(start_dt)
+                    return self.get_straddle_strike(current_dt)
                 else:
-                    return ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt
+                    return ce_scrip, pe_scrip, ce_price, pe_price, future_price, current_dt
             except (IndexError, KeyError, ValueError, TypeError):
-                start_dt += datetime.timedelta(minutes = 1)
-                if start_dt.time() > datetime.time(15, 29): break
-                
+                if current_dt.date() != current_date: break
             except Exception as e:
                 print('get_straddle_strike', e)
                 traceback.print_exc()
-                start_dt += datetime.timedelta(minutes = 1)
-                if start_dt.time() > datetime.time(15, 29): break
+                if current_dt.date() != current_date: break
                 
         return None, None, None, None, None, None
     
     def get_ut_strike(self, start_dt, end_dt, om=None, target=None):
-        while start_dt < end_dt:
+        
+        current_date = start_dt.date()
+        valid_times = self.future_data.loc[start_dt:end_dt].index
+        for current_dt in valid_times:
             try:
-                future_price = self.future_data.loc[start_dt,'close']
+                future_price = self.future_data.loc[current_dt,'close']
                 step = self.STEPS[self.index.lower()]
                 target = ((int(future_price/step)*step)/100*om) if target is None else target
-                target_od = self.options[(self.options['date_time'] == start_dt) & (self.options['close'] >= target)].sort_values(by=['close']).copy()
+                target_od = self.options[(self.options['date_time'] == current_dt) & (self.options['close'] >= target)].sort_values(by=['close']).copy()
                 
                 ce_scrip = target_od.loc[target_od['scrip'].str.endswith('CE'), 'scrip'].iloc[0]
                 pe_scrip = target_od.loc[target_od['scrip'].str.endswith('PE'), 'scrip'].iloc[0]
                 
-                ce_price, pe_price = self.options_data.loc[(start_dt, ce_scrip),'close'], self.options_data.loc[(start_dt, pe_scrip),'close']
+                ce_price, pe_price = self.options_data.loc[(current_dt, ce_scrip),'close'], self.options_data.loc[(current_dt, pe_scrip),'close']
 
-                return ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt
+                return ce_scrip, pe_scrip, ce_price, pe_price, future_price, current_dt
             except (IndexError, KeyError, ValueError, TypeError):
-                start_dt += datetime.timedelta(minutes = 1)
-                if start_dt.time() > datetime.time(15, 29): break
-                
+                if current_dt.date() != current_date: break
             except Exception as e:
                 print('get_straddle_strike', e)
                 traceback.print_exc()
-                start_dt += datetime.timedelta(minutes = 1)
-                if start_dt.time() > datetime.time(15, 29): break
+                if current_dt.date() != current_date: break
 
     def _get_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1, only=None, obove_target_only=False, SDroundoff=False):
         

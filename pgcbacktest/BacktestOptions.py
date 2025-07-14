@@ -28,6 +28,11 @@ cv = lambda x: str(float(x)) if isinstance(x, (int, float)) or (isinstance(x, st
 def cal_percent(price, percent):
     return price * percent/100
 
+def get_strike(scrip):
+    strike = float(scrip[:-2])
+    strike = int(strike) if strike.is_integer() else strike
+    return strike
+
 chunk_size = 100000
 def is_file_exists(output_csv_path, file_name, parameter_size):
     return all([os.path.exists(f"{output_csv_path}{file_name} No-{idx}.parquet") for idx, i in enumerate(range(0, parameter_size, chunk_size), start=1)])
@@ -40,9 +45,9 @@ def save_chunk_data(chunk, log_cols, chunck_file_name):
     
 class IntradayBacktest:
     
-    PREFIX = {'nifty': 'Nifty', 'banknifty': 'BN', 'finnifty': 'FN', 'midcpnifty': 'MCN', 'sensex': 'SX','bankex': 'BX'}
-    STEPS = {'nifty': 1000, 'banknifty': 5000, 'finnifty': 1000, 'midcpnifty': 1000, 'sensex': 5000,'bankex': 5000}
-    SLIPAGES = {'nifty': 0.01, 'banknifty': 0.0125, 'finnifty': 0.01, 'midcpnifty': 0.0125, 'sensex': 0.0125, 'bankex': 0.0125}
+    PREFIX = {'nifty': 'Nifty', 'banknifty': 'BN', 'finnifty': 'FN', 'midcpnifty': 'MCN', 'sensex': 'SX','bankex': 'BX', 'spxw': 'SPXW', 'xsp': 'XSP'}
+    STEPS = {'nifty': 1000, 'banknifty': 5000, 'finnifty': 1000, 'midcpnifty': 1000, 'sensex': 5000,'bankex': 5000, 'spxw': 500, 'xsp': 50}
+    SLIPAGES = {'nifty': 0.01, 'banknifty': 0.0125, 'finnifty': 0.01, 'midcpnifty': 0.0125, 'sensex': 0.0125, 'bankex': 0.0125, 'spxw': 0.01, 'xsp': 0.01}
 
     token, group_id = '5156026417:AAExQbrMAPrV0qI8tSYplFDjZltLBzXTm1w', '-607631145'
 
@@ -167,7 +172,7 @@ class IntradayBacktest:
                     else:
                         sd_range = max(self.gap, round(sd_range/self.gap)*self.gap)
 
-                    ce_scrip, pe_scrip = f"{int(ce_scrip[:-2]) + sd_range}CE", f"{int(pe_scrip[:-2]) - sd_range}PE"
+                    ce_scrip, pe_scrip = f"{get_strike(ce_scrip) + sd_range}CE", f"{get_strike(pe_scrip) - sd_range}PE"
                     ce_price, pe_price = self.options_data.loc[(current_dt,ce_scrip),'close'], self.options_data.loc[(current_dt,pe_scrip),'close']
                 
                 return ce_scrip, pe_scrip, ce_price, pe_price, future_price, current_dt
@@ -193,8 +198,8 @@ class IntradayBacktest:
                 ce_scrip = target_od.loc[target_od['scrip'].str.endswith('CE'), 'scrip'].iloc[0]
                 pe_scrip = target_od.loc[target_od['scrip'].str.endswith('PE'), 'scrip'].iloc[0]
                 
-                ce_scrip_list = [ce_scrip, f"{int(ce_scrip[:-2])-self.gap}CE", f"{int(ce_scrip[:-2])+self.gap}CE"]
-                pe_scrip_list = [pe_scrip, f"{int(pe_scrip[:-2])-self.gap}PE", f"{int(pe_scrip[:-2])+self.gap}PE"]
+                ce_scrip_list = [ce_scrip, f"{get_strike(ce_scrip)-self.gap}CE", f"{get_strike(ce_scrip)+self.gap}CE"]
+                pe_scrip_list = [pe_scrip, f"{get_strike(pe_scrip)-self.gap}PE", f"{get_strike(pe_scrip)+self.gap}PE"]
                         
                 call_list_prices, put_list_prices = [], []
                 for z in range(3):
@@ -227,7 +232,7 @@ class IntradayBacktest:
                 ce_scrip, pe_scrip = ce_scrip_list[call_list_prices.index(required_call)], pe_scrip_list[put_list_prices.index(required_put)]
                 ce_price, pe_price = self.options_data.loc[(current_dt, ce_scrip), 'close'], self.options_data.loc[(current_dt, pe_scrip), 'close']
                 
-                if int(ce_scrip[:-2]) < int(pe_scrip[:-2]) and check_inverted:
+                if get_strike(ce_scrip) < get_strike(pe_scrip) and check_inverted:
                     return self.get_straddle_strike(current_dt)
                 else:
                     return ce_scrip, pe_scrip, ce_price, pe_price, future_price, current_dt
@@ -1000,7 +1005,7 @@ class WeeklyBacktest(IntradayBacktest):
                     else:
                         sd_range = max(self.gap, round(sd_range/self.gap)*self.gap)
 
-                    ce_scrip, pe_scrip = f"{int(ce_scrip[:-2]) + sd_range}CE", f"{int(pe_scrip[:-2]) - sd_range}PE"
+                    ce_scrip, pe_scrip = f"{get_strike(ce_scrip) + sd_range}CE", f"{get_strike(pe_scrip) - sd_range}PE"
                     ce_price, pe_price = self.options_data.loc[(current_dt,ce_scrip),'close'], self.options_data.loc[(current_dt,pe_scrip),'close']
                 
                 return ce_scrip, pe_scrip, ce_price, pe_price, future_price, current_dt
@@ -1077,8 +1082,8 @@ class WeeklyBacktest(IntradayBacktest):
                 ce_scrip = target_od.loc[target_od['scrip'].str.endswith('CE'), 'scrip'].iloc[0]
                 pe_scrip = target_od.loc[target_od['scrip'].str.endswith('PE'), 'scrip'].iloc[0]
                 
-                ce_scrip_list = [ce_scrip, f"{int(ce_scrip[:-2])-self.gap}CE", f"{int(ce_scrip[:-2])+self.gap}CE"]
-                pe_scrip_list = [pe_scrip, f"{int(pe_scrip[:-2])-self.gap}PE", f"{int(pe_scrip[:-2])+self.gap}PE"]
+                ce_scrip_list = [ce_scrip, f"{get_strike(ce_scrip)-self.gap}CE", f"{get_strike(ce_scrip)+self.gap}CE"]
+                pe_scrip_list = [pe_scrip, f"{get_strike(pe_scrip)-self.gap}PE", f"{get_strike(pe_scrip)+self.gap}PE"]
                         
                 call_list_prices, put_list_prices = [], []
                 for z in range(3):
@@ -1111,7 +1116,7 @@ class WeeklyBacktest(IntradayBacktest):
                 ce_scrip, pe_scrip = ce_scrip_list[call_list_prices.index(required_call)], pe_scrip_list[put_list_prices.index(required_put)]
                 ce_price, pe_price = self.options_data.loc[(current_dt, ce_scrip), 'close'], self.options_data.loc[(current_dt, pe_scrip), 'close']
                 
-                if int(ce_scrip[:-2]) < int(pe_scrip[:-2]) and check_inverted:
+                if get_strike(ce_scrip) < get_strike(pe_scrip) and check_inverted:
                     return self.get_straddle_strike(current_dt)
                 else:
                     return ce_scrip, pe_scrip, ce_price, pe_price, future_price, current_dt

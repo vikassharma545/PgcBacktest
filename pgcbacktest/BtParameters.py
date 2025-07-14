@@ -6,8 +6,7 @@ import itertools
 import pandas as pd
 
 def get_dte_file(pickle_path):
-    dtypes = {"Day": "category", "BANKNIFTY": "Int8", "NIFTY": "Int8", "FINNIFTY": "Int8", "MIDCPNIFTY": "Int8", "BANKEX": "Int8", "SENSEX": "Int8"}
-    dte_file = pd.read_csv(f"{pickle_path}DTE.csv", parse_dates=['Date'], dayfirst=True, dtype=dtypes).set_index("Date")
+    dte_file = pd.read_csv(f"{pickle_path}DTE.csv", parse_dates=['Date'], dayfirst=True).set_index("Date")
     return dte_file
 
 def get_index_data(index, pickle_path):

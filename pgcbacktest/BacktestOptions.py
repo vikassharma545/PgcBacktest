@@ -91,10 +91,12 @@ class IntradayBacktest:
 
     def get_gap(self):
         try:
-            strike = self.options.scrip.str[:-2].astype(int).unique()
+            strike = self.options.scrip.str[:-2].astype(float).unique()
             strike.sort()
             differences = np.diff(strike)
-            return differences.min()
+            min_gap = float(differences.min())
+            min_gap = int(min_gap) if min_gap.is_integer() else min_gap
+            return min_gap
         except Exception as e:
             print(e)
 

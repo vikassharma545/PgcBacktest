@@ -9,7 +9,7 @@ from glob import glob
 from time import sleep
 import concurrent.futures
 import dask.dataframe as dd
-
+os.environ["POLARS_MAX_THREADS"] = str(max(1, round(os.cpu_count() * 0.7)))
 pl.enable_string_cache()
 
 os.system(f'title DashBoard FileMaker')

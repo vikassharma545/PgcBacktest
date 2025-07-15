@@ -12,7 +12,7 @@ setup(
     packages=find_packages(),
     install_requires=[
         "pandas==2.3.1",
-        "polars==1.31.0",
+        "polars==1.27.1",
         "plotly==6.2.0",
         "numpy==2.2.6",
         "dask==2025.7.0",

@@ -45,9 +45,11 @@ def save_chunk_data(chunk, log_cols, chunck_file_name):
     
 class IntradayBacktest:
     
-    PREFIX = {'nifty': 'Nifty', 'banknifty': 'BN', 'finnifty': 'FN', 'midcpnifty': 'MCN', 'sensex': 'SX','bankex': 'BX', 'spxw': 'SPXW', 'xsp': 'XSP'}
+    PREFIX = {'nifty': 'Nifty', 'banknifty': 'BN', 'finnifty': 'FN', 'midcpnifty': 'MCN', 'sensex': 'SX','bankex': 'BX'}
+    SLIPAGES = {'nifty': 0.01, 'banknifty': 0.0125, 'finnifty': 0.01, 'midcpnifty': 0.0125, 'sensex': 0.0125, 'bankex': 0.0125}
     STEPS = {'nifty': 1000, 'banknifty': 5000, 'finnifty': 1000, 'midcpnifty': 1000, 'sensex': 5000,'bankex': 5000, 'spxw': 500, 'xsp': 50}
-    SLIPAGES = {'nifty': 0.01, 'banknifty': 0.0125, 'finnifty': 0.01, 'midcpnifty': 0.0125, 'sensex': 0.0125, 'bankex': 0.0125, 'spxw': 0.01, 'xsp': 0.01}
+    STEPS.update({'spxw_mon': 500, 'spx_tue': 500, 'spx_wed': 500, 'spx_thu': 500, 'spx_fri': 500, 'xsp_mon': 50, 'xsp_tue': 50, 'xsp_wed': 50, 'xsp_thu': 50, 'xsp_fri': 50})
+    STEPS.update({'crudeoil':500, 'crudeoilm':500, 'natgasmini':50, 'naturalgas':50})
 
     token, group_id = '5156026417:AAExQbrMAPrV0qI8tSYplFDjZltLBzXTm1w', '-607631145'
 
@@ -74,13 +76,12 @@ class IntradayBacktest:
         self.straddle_indicator = lru_cache(maxsize=4096)(self._straddle_indicator)
 
     def get_future_option_path(self, index):
-        index = index.lower()
-        future_pickle_path = f'{self.pickle_path}{self.PREFIX[index]} Future/{{date}}_{index}_future.pkl'
-        option_pickle_path = f'{self.pickle_path}{self.PREFIX[index]} Options/{{date}}_{index}.pkl'
+        future_pickle_path = f'{self.pickle_path}{self.PREFIX.get(index.lower(), index)} Future/{{date}}_{index}_future.pkl'
+        option_pickle_path = f'{self.pickle_path}{self.PREFIX.get(index.lower(), index)} Options/{{date}}_{index}.pkl'
         return future_pickle_path, option_pickle_path
 
     def Cal_slipage(self, price):
-        return price * self.SLIPAGES[self.index.lower()]
+        return price * self.SLIPAGES.get(self.index.lower(), 0.01)
     
     def send_tg_msg(self, msg):
         print(msg)

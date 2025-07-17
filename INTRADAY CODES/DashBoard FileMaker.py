@@ -14,6 +14,27 @@ pl.enable_string_cache()
 
 os.system(f'title DashBoard FileMaker')
 
+pickle_paths = glob("C:/*PICKLE*/DTE.csv")
+# choose pickle path
+if not pickle_paths:
+    dte_file = pd.read_csv(f"C:/PICKLE/DTE.csv", parse_dates=['Date'], dayfirst=True).set_index("Date")
+else:
+    if len(pickle_paths) > 1:
+        print("Available DTE CSV Files:")
+        for i, path in enumerate(pickle_paths, 1):
+            print(f"{i}. {path}")
+            
+        while True:
+            try:
+                idx = int(input("Select DTE CSV File by number: ")) - 1
+                if 0 <= idx < len(pickle_paths):
+                    dte_file = pd.read_csv(pickle_paths[idx], parse_dates=['Date'], dayfirst=True).set_index("Date")
+                    break
+            except (ValueError, IndexError):
+                print("Invalid selection. Please try again.")
+    else:
+        dte_file = pd.read_csv(pickle_paths[0], parse_dates=['Date'], dayfirst=True).set_index("Date")
+
 def print_heading(title="🗂 Folder Selection & Configuration"):
     print("\n" + "="*60)
     print(f"{title.center(60)}")
@@ -92,10 +113,11 @@ if parquet_files:
 else:
     print("No Parquet files found in the provided folder path.")
     input("\nPress Enter to Exit !!!")
+    sys.exit(0)
 
 max_row = 500000
 dashboard_folder_path = parquet_files_folder_path.replace('_output', '_dashboard')
-dte_file = pd.read_csv(f"C:/PICKLE/DTE.csv", parse_dates=['Date'], dayfirst=True).set_index("Date")
+
 os.makedirs(dashboard_folder_path, exist_ok=True)
 year_day_dte_files = get_year_day_dte_files(parquet_files)
 

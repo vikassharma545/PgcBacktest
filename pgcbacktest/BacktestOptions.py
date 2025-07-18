@@ -14,8 +14,8 @@ pd.set_option('future.no_silent_downcasting', True)
 class DataEmptyError(Exception):
     pass
 
-def get_pm_time_index(date):
-    time_index = pd.date_range(datetime.datetime.combine(date, datetime.time(9,15)), datetime.datetime.combine(date, datetime.time(15,29)), freq='1min')
+def get_pm_time_index(date, meta_start_time, meta_end_time):
+    time_index = pd.date_range(datetime.datetime.combine(date, meta_start_time), datetime.datetime.combine(date, meta_end_time), freq='1min')
     return time_index
 
 def set_pm_time_index(data, time_index):

@@ -7,14 +7,26 @@ import pandas as pd
 import polars as pl
 from glob import glob
 from time import sleep
+from tqdm import tqdm
 import concurrent.futures
 import dask.dataframe as dd
 os.environ["POLARS_MAX_THREADS"] = str(max(1, round(os.cpu_count() * 0.7)))
 pl.enable_string_cache()
 
-os.system(f'title DashBoard FileMaker')
+title = "DashBoard FileMaker Weekly"
+print(title)
+if sys.platform == 'linux':
+    sys.stdout.write(f"\033]0;{title}\007")
+    sys.stdout.flush()
+elif sys.platform == 'win32':
+    import ctypes
+    ctypes.windll.kernel32.SetConsoleTitleW(title)
 
-pickle_paths = glob("C:/*PICKLE*/DTE.csv")
+if sys.platform == 'linux':
+    pickle_paths = glob("/mnt/c/*PICKLE*/DTE.csv")
+else:
+    pickle_paths = glob("C:/*PICKLE*/DTE.csv")
+    
 # choose pickle path
 if not pickle_paths:
     dte_file = pd.read_csv(f"C:/PICKLE/DTE.csv", parse_dates=['Date'], dayfirst=True).set_index("Date")
@@ -58,10 +70,10 @@ def list_and_select_directory(current_path='.'):
         # Get user selection
         while True:
             try:
-                idx = int(input("Pls Select Code: "))
+                idx = int(input("Pls Select Code Output Folder: "))
                 if 1 <= idx <= len(folders):
                     selected_folder = folders[idx - 1]
-                    print(f"\nSelected Code: {selected_folder}")
+                    print(f"\nSelected Code Output Folder: {selected_folder}")
                     # Update path and continue
                     current_path = os.path.join(current_path, selected_folder)
                     break
@@ -77,8 +89,8 @@ def get_parquet_files(folder_path):
     return [file for path, subdir, files in os.walk(folder_path) for file in glob(os.path.join(path, EXT))]
 
 def get_code_index_cols(parquet_files):
-    code = parquet_files[0].split('\\')[-1].split(' ')[2]
-    indices = sorted(set([f.split('\\')[-1].split(' ')[0] for f in parquet_files]))
+    code = parquet_files[0].replace('\\', '/').split('/')[-1].split(' ')[2]
+    indices = sorted(set([f.replace('\\', '/').split('/')[-1].split(' ')[0] for f in parquet_files]))
     
     df = pd.read_parquet(max(parquet_files, key=lambda f: os.path.getsize(f)))
     name_columns = [c for c in list(df.columns) if c.startswith('P_')]
@@ -88,10 +100,10 @@ def get_code_index_cols(parquet_files):
 def get_year_dte_files(parquet_files):
     year_dte_files = {}
     for file in parquet_files:
-        index = file.split('\\')[-1].split(' ')[0]
-        date = datetime.datetime.strptime(file.split('\\')[-1].split(' ')[1], "%Y-%m-%d")
+        index = file.replace('\\', '/').split('/')[-1].split(' ')[0]
+        date = datetime.datetime.strptime(file.replace('\\', '/').split('/')[-1].split(' ')[1], "%Y-%m-%d")
         year = date.year
-        dte = file.split('\\')[-1].split(' ')[3].replace('-', '_')
+        dte = file.replace('\\', '/').split('/')[-1].split(' ')[3].replace('-', '_')
         year_dte_files[f'{index}-{year}-{dte}'] = year_dte_files.get(f'{index}-{year}-{dte}', []) + [file]
 
     return year_dte_files
@@ -114,16 +126,42 @@ else:
     input("\nPress Enter to Exit !!!")
     sys.exit(0)
 
-max_row = 500000
-dashboard_folder_path = parquet_files_folder_path.replace('_output', '_dashboard')
-dte_file = pd.read_csv(f"C:/PICKLE/DTE.csv", parse_dates=['Date'], dayfirst=True).set_index("Date")
-os.makedirs(dashboard_folder_path, exist_ok=True)
-year_dte_files = get_year_dte_files(parquet_files)
+### checking parquet files
+def check_parquet_file(file):
+    try:
+        pd.read_parquet(file)
+        return None
+    except Exception as e:
+        return f"Error reading file {file}: {e}"
+
+with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
+    results = list(tqdm(executor.map(check_parquet_file, parquet_files), total=len(parquet_files), desc="Checking Parquet Files"))
+
+errors = [r for r in results if r]
+error_files = [parquet_files[i] for i, r in enumerate(results) if r]
+
+if errors:
+    for err in errors:
+        print(err)
+    if input("Delete all error files? (y/n): ").strip().lower() == 'y':
+        for f in error_files:
+            try:
+                os.remove(f)
+                print(f"Deleted: {f}")
+            except Exception as e:
+                print(f"Failed to delete {f}: {e}")
+    input("Press Enter to Exit !!!")
+    sys.exit(0)
 
 if input("Proceed with execution? (y/n): ").strip().lower() != 'y':
     print('❌ Execution cancelled.')
     sleep(2)
     sys.exit(0)
+
+max_row = 500000
+dashboard_folder_path = parquet_files_folder_path.replace('_output', '_dashboard')
+os.makedirs(dashboard_folder_path, exist_ok=True)
+year_dte_files = get_year_dte_files(parquet_files)
 
 print()
 print('Building DashBoard Files... \n')

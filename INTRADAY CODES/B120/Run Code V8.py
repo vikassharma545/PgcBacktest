@@ -67,6 +67,17 @@ def convert_notebook_to_script(notebook_path, script_path, temp_meta_data_path):
         
     return code, output_csv_path
 
+def get_linux_pid(proc):
+    
+    cmdline = " ".join(processes[0].args[-4:])
+    linux_processes = subprocess.run(['wsl.exe', 'ps', 'aux'], capture_output=True, text=True)
+    linux_processes = [l for l in linux_processes.stdout.splitlines() if "/usr/bin/python3" in l and "cmd.exe" not in l]
+
+    for process in linux_processes:
+        if cmdline in process:
+            pid = process.split()[1]
+            return pid
+
 # --- Platform-specific paths ---
 if sys.platform == 'linux':
     cache_path = "/mnt/c/.temp"
@@ -198,9 +209,6 @@ for idx, row in df.iterrows():
             proc = subprocess.Popen([python_path, script_output, "-r", str(idx)])
         processes.append(proc)
         sleep(5)
-        
-if sys.platform == "linux":
-    sys.exit(0)
 
 # --- Monitoring Memory/CPU & Terminals ---
 check_time = datetime.datetime.now() + datetime.timedelta(minutes=5)
@@ -251,6 +259,10 @@ while True:
             # Killed Processes
             for proc in processes:
                 try:
+                    
+                    if sys.platform == 'linux':
+                        proc = psutil.Process(int(get_linux_pid(proc)))
+                    
                     proc.terminate()
                     proc.wait(timeout=2)
                     print(f"Killed - {proc.args[-1]}")

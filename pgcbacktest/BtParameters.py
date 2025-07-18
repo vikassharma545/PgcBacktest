@@ -1,5 +1,4 @@
 import sys
-import ctypes
 import datetime
 import argparse
 import itertools
@@ -35,8 +34,15 @@ def get_meta_data(code, meta_data_path):
 
         if args.MetaRowNo is not None:
             meta_row_nos = [args.MetaRowNo]
-
-        ctypes.windll.kernel32.SetConsoleTitleW(f"{code} {meta_row_nos}")
+        
+        title = f"{code} {meta_row_nos}"
+            
+        if sys.platform == 'linux':
+            sys.stdout.write(f"\033]0;{title}\007")
+            sys.stdout.flush()
+        elif sys.platform == 'win32':
+            import ctypes
+            ctypes.windll.kernel32.SetConsoleTitleW(title)
         
     meta_row_nos = meta_row_nos or range(len(meta_data))
     return meta_data, meta_row_nos

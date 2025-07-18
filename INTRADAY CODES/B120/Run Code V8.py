@@ -10,7 +10,6 @@ import subprocess
 import numpy as np
 import pandas as pd
 from time import sleep
-import pygetwindow as gw
 from nbconvert import PythonExporter
 
 def fun_timer(seconds):
@@ -69,7 +68,13 @@ def convert_notebook_to_script(notebook_path, script_path, temp_meta_data_path):
     return code, output_csv_path
 
 # --- Platform-specific paths ---
-cache_path = "C:/.temp"
+if sys.platform == 'linux':
+    cache_path = "/mnt/c/.temp"
+    pickle_path = '/mnt/c/PICKLE/'
+else:
+    cache_path = "C:/.temp"
+    pickle_path = 'C:/PICKLE/'
+
 strategy_cache_path = f"{cache_path}/{{strategy}}"
 os.makedirs(cache_path, exist_ok=True)
 
@@ -94,13 +99,11 @@ code, output_csv_path = convert_notebook_to_script(jupyter_code, script_output, 
 code_details = f'\n#### RUN CODE ####\nCode: {code}\nJupyterCode: {jupyter_code} \nParameter: {parameter_csv} \nMetaData Parameter: {parameter_meta_data} \n##################'
 print(code_details)
 
-# --- Python Path ---
-python_path = [p for p in sys.path if p.endswith("\\Lib\\site-packages")][0].replace("\\Lib\\site-packages", "") + "\\python.exe"
-python_path = python_path.replace("\\", "/")
+python_path = sys.executable
 
 from pgcbacktest.BtParameters import *
 from pgcbacktest.BacktestOptions import *
-pickle_path = 'C:/PICKLE/'
+
 _, parameter_len = get_parameter_data(code, parameter_csv)
 meta_data, _ = get_meta_data(code, parameter_meta_data)
 no_of_chunk = math.ceil(parameter_len/chunk_size)
@@ -130,15 +133,15 @@ if total_pending_dates == 0:
     print('\nNo Pending Dates Left all Dates files Complete :)')
     sleep(5)
     sys.exit()
-    
-terminal_title = f'Code Monitor: {code_base}'
-windows_titles = [window.title for window in gw.getAllWindows()]
-if terminal_title in windows_titles:
-    print("\nRun Code Already Running for this Code :)")
-    sleep(5)
-    sys.exit()
-else:
-    ctypes.windll.kernel32.SetConsoleTitleW(terminal_title)
+
+title = f'Code Monitor: {code_base}'
+if sys.platform == 'linux':
+    sys.stdout.write(f"\033]0;{title}\007")
+    sys.stdout.flush()
+elif sys.platform == 'win32':
+    import ctypes
+    ctypes.windll.kernel32.SetConsoleTitleW(title)
+
 
 print('MetaData Creating...')
 if no_of_terminal_allowed > 0:
@@ -189,9 +192,15 @@ df = pd.read_csv(parameter_meta_data_for_run)
 for idx, row in df.iterrows():
     if row.get('run', False):
         print(f"Running Row {idx}: {code_base}")
-        proc = subprocess.Popen([python_path, script_output, "-r", str(idx)], creationflags=subprocess.CREATE_NEW_CONSOLE)
+        if sys.platform == 'linux':
+            proc = subprocess.Popen(['cmd.exe', '/c', 'start', 'wsl.exe', python_path, script_output, "-r", str(idx)])
+        else:
+            proc = subprocess.Popen([python_path, script_output, "-r", str(idx)])
         processes.append(proc)
         sleep(5)
+        
+if sys.platform == "linux":
+    sys.exit(0)
 
 # --- Monitoring Memory/CPU & Terminals ---
 check_time = datetime.datetime.now() + datetime.timedelta(minutes=5)
@@ -223,7 +232,7 @@ while True:
 
                 if pending_files:
                     print(f"Running Row {proc.args[-1]}: {code_base}")
-                    proc = subprocess.Popen(proc.args, creationflags=subprocess.CREATE_NEW_CONSOLE)
+                    proc = subprocess.Popen(proc.args)
                     sleep(5)
                     processes[idx] = proc
 
@@ -318,14 +327,17 @@ while True:
             for idx, row in df.iterrows():
                 if row.get('run', False):
                     print(f"Running Row {idx}: {code_base}")
-                    proc = subprocess.Popen([python_path, script_output, "-r", str(idx)], creationflags=subprocess.CREATE_NEW_CONSOLE)
+                    if sys.platform == 'linux':
+                        proc = subprocess.Popen(['cmd.exe', '/c', 'start', 'wsl.exe', python_path, script_output, "-r", str(idx)])
+                    else:
+                        proc = subprocess.Popen([python_path, script_output, "-r", str(idx)])
                     processes.append(proc)
                     sleep(5)
 
         else:
             print()
             fun_timer(10)
-            os.system('cls')
+            os.system('clear') if sys.platform == 'linux' else os.system('cls')
             print(msg, end='\r')
 
     except Exception as e:

@@ -130,12 +130,12 @@ else:
 ### checking parquet files
 def check_parquet_file(file):
     try:
-        pd.read_parquet(file)
+        pl.read_parquet(file)
         return None
     except Exception as e:
         return f"Error reading file {file}: {e}"
 
-with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
+with concurrent.futures.ThreadPoolExecutor(max_workers=7) as executor:
     results = list(tqdm(executor.map(check_parquet_file, parquet_files), total=len(parquet_files), desc="Checking Parquet Files"))
 
 errors = [r for r in results if r]

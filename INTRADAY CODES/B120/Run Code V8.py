@@ -176,7 +176,7 @@ if no_of_terminal_allowed > 0:
 
     temp_meta_data = pd.DataFrame(columns=meta_data.columns)
     for key, value in index_dte_dates.items():
-        temp_meta_data.loc[len(temp_meta_data)] = [key[-2], key[-1], value[0].strftime("%d-%m-%Y"), value[-1].strftime("%d-%m-%Y"), datetime.time(9,15), datetime.time(15,29), True]
+        temp_meta_data.loc[len(temp_meta_data)] = [key[-2], key[-1], value[0].strftime("%d-%m-%Y"), value[-1].strftime("%d-%m-%Y"), meta_data.loc[(meta_data['index'] == key[-2]) & (meta_data['dte'] == key[-1]), 'start_time'].iloc[0], meta_data.loc[(meta_data['index'] == key[-2]) & (meta_data['dte'] == key[-1]), 'end_time'].iloc[0], True]
     temp_meta_data.to_csv(parameter_meta_data_for_run, index=False)
 else:
     meta_data.to_csv(parameter_meta_data_for_run, index=False)
@@ -297,7 +297,7 @@ while True:
 
                 temp_meta_data = pd.DataFrame(columns=meta_data.columns)
                 for key, value in index_dte_dates.items():
-                    temp_meta_data.loc[len(temp_meta_data)] = [key[-2], key[-1], value[0].strftime("%d-%m-%Y"), value[-1].strftime("%d-%m-%Y"), datetime.time(9,15), datetime.time(15,29), True]
+                    temp_meta_data.loc[len(temp_meta_data)] = [key[-2], key[-1], value[0].strftime("%d-%m-%Y"), value[-1].strftime("%d-%m-%Y"), meta_data.loc[(meta_data['index'] == key[-2]) & (meta_data['dte'] == key[-1]), 'start_time'].iloc[0], meta_data.loc[(meta_data['index'] == key[-2]) & (meta_data['dte'] == key[-1]), 'end_time'].iloc[0], True]
                 temp_meta_data.to_csv(parameter_meta_data_for_run, index=False)
             else:
                 meta_data.to_csv(parameter_meta_data_for_run, index=False)

@@ -9,14 +9,21 @@ def get_dte_file(pickle_path):
     dte_file = pd.read_csv(f"{pickle_path}DTE.csv", parse_dates=['Date'], dayfirst=True).set_index("Date")
     return dte_file
 
-def get_index_data(index, pickle_path):
-    index_df = pd.read_csv(f"{pickle_path}{index}.csv", parse_dates=['datetime'], dayfirst=False)
-    return index_df
-
 def get_meta_data(code, meta_data_path):
     
     dtypes = {"index": "category", "dte":"Int8", "run":"bool"}
-    meta_data = pd.read_csv(meta_data_path, parse_dates=["from_date", "to_date"], dayfirst=True, dtype=dtypes)
+    meta_data = pd.read_csv(meta_data_path, dtype=dtypes)
+    
+    try:
+        meta_data['from_date'] = pd.to_datetime(meta_data['from_date'], format="%d-%m-%Y")
+    except:
+        meta_data['from_date'] = pd.to_datetime(meta_data['from_date'], format="%Y-%m-%d")
+    
+    try:
+        meta_data['to_date'] = pd.to_datetime(meta_data['to_date'], format="%d-%m-%Y")
+    except:
+        meta_data['to_date'] = pd.to_datetime(meta_data['to_date'], format="%Y-%m-%d")
+    
     meta_data["start_time"] = pd.to_datetime(meta_data["start_time"], format="%H:%M:%S").dt.time
     meta_data["end_time"] = pd.to_datetime(meta_data["end_time"], format="%H:%M:%S").dt.time
         

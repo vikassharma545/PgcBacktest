@@ -55,13 +55,13 @@ class IntradayBacktest:
 
     def __init__(self, pickle_path, index, current_date, dte, start_time, end_time):
         
-        self.pickle_path, self.index, self.current_date, self.dte = pickle_path, index, current_date, dte
+        self.pickle_path, self.index, self.current_date, self.dte, self.meta_start_time, self.meta_end_time = pickle_path, index, current_date, dte, start_time, end_time
         self.__future_pickle_path, self.__option_pickle_path = self.get_future_option_path(index)
         self.future_data = pd.read_pickle(self.__future_pickle_path.format(date=self.current_date.date())).set_index(['date_time'])
         self.future_data = self.future_data[["open", "high", "low", "close"]]
         self.options = pd.read_pickle(self.__option_pickle_path.format(date=self.current_date.date()))
         self.options = self.options[["scrip", "date_time", "open", "high", "low", "close"]]
-        self.options = self.options[(self.options['date_time'].dt.time >= start_time) & (self.options['date_time'].dt.time <= end_time)]
+        self.options = self.options[(self.options['date_time'].dt.time >= self.meta_start_time) & (self.options['date_time'].dt.time <= self.meta_end_time)]
         self.options_data = self.options.set_index(['date_time', 'scrip'])
         self.gap = self.get_gap()
         
@@ -885,7 +885,7 @@ class IntradayBacktest:
 
     def _straddle_indicator(self, start_dt, end_dt, si_indicator, si_buffer, buffer_min):
 
-        buffer_start = max(datetime.datetime.combine(start_dt.date(), datetime.time(9, 15)), start_dt - datetime.timedelta(minutes=buffer_min))
+        buffer_start = max(datetime.datetime.combine(start_dt.date(), self.meta_start_time), start_dt - datetime.timedelta(minutes=buffer_min))
         buffer_range = pd.date_range(buffer_start, start_dt - datetime.timedelta(minutes=1), freq='1min')
         
         std_prices = [self.get_strike(dt, dt+datetime.timedelta(minutes=1))[2:4] for dt in buffer_range]
@@ -919,7 +919,7 @@ class WeeklyBacktest(IntradayBacktest):
 
     def __init__(self, pickle_path, index, week_dates, from_dte, to_dte, start_time, end_time):
         
-        self.pickle_path, self.index, self.week_dates, self.from_dte, self.to_dte = pickle_path, index, week_dates, from_dte, to_dte
+        self.pickle_path, self.index, self.week_dates, self.from_dte, self.to_dte, self.meta_start_time, self.meta_end_time = pickle_path, index, week_dates, from_dte, to_dte, start_time, end_time
         
         self.current_week_dates = sorted(set(([self.week_dates[0]] * (7 - len(self.week_dates)) + self.week_dates)[-from_dte : None if to_dte == 1 else -to_dte + 1]))
         self.__future_pickle_path, self.__option_pickle_path = self.get_future_option_path(index)
@@ -1024,7 +1024,7 @@ class WeeklyBacktest(IntradayBacktest):
     def _get_EOD_straddle_strike(self, current_date):
         
         check_limit = 15 #min
-        start_dt = datetime.datetime.combine(current_date, datetime.time(15,29))
+        start_dt = datetime.datetime.combine(current_date, self.meta_end_time)
         end_dt = start_dt - datetime.timedelta(minutes=check_limit)
         
         while start_dt > end_dt:
@@ -1195,8 +1195,8 @@ class WeeklyBacktest(IntradayBacktest):
         try:
             scrip_df = self.get_single_leg_data(start_dt, end_dt, scrip).copy()
             if scrip_df.empty: raise DataEmptyError
-            scrip_df.loc[scrip_df['date_time'].dt.time == datetime.time(9,15), 'high'] = scrip_df['close']
-            scrip_df.loc[scrip_df['date_time'].dt.time == datetime.time(9,15), 'low'] = scrip_df['close']
+            scrip_df.loc[scrip_df['date_time'].dt.time == self.meta_start_time, 'high'] = scrip_df['close']
+            scrip_df.loc[scrip_df['date_time'].dt.time == self.meta_start_time, 'low'] = scrip_df['close']
 
             o = scrip_df['close'].iloc[0] if o is None else o
             slipage = self.Cal_slipage(o) if pl_with_slipage else 0
@@ -1253,7 +1253,7 @@ class WeeklyBacktest(IntradayBacktest):
             else:
                 exit_price = c
                 
-            if sl_flag and exit_time.time() == datetime.time(9,15):
+            if sl_flag and exit_time.time() == self.meta_start_time:
                 exit_price = scrip_df.loc[scrip_df['date_time'] == exit_time, 'close'].iloc[0]
 
             pnl = (exit_price - o) if orderside == 'BUY' else (o - exit_price)
@@ -1302,8 +1302,8 @@ class WeeklyBacktest(IntradayBacktest):
         try:
             scrip_df = self.get_straddle_data(start_dt, end_dt, ce_scrip, pe_scrip).copy()
             if scrip_df.empty: raise DataEmptyError
-            scrip_df.loc[scrip_df['date_time'].dt.time == datetime.time(9,15), 'high'] = scrip_df['close']
-            scrip_df.loc[scrip_df['date_time'].dt.time == datetime.time(9,15), 'low'] = scrip_df['close']
+            scrip_df.loc[scrip_df['date_time'].dt.time == self.meta_start_time, 'high'] = scrip_df['close']
+            scrip_df.loc[scrip_df['date_time'].dt.time == self.meta_start_time, 'low'] = scrip_df['close']
 
             o = scrip_df['close'].iloc[0] if o is None else o
             slipage = self.Cal_slipage(o) if pl_with_slipage else 0
@@ -1360,7 +1360,7 @@ class WeeklyBacktest(IntradayBacktest):
             else:
                 exit_price = c
 
-            if sl_flag and exit_time.time() == datetime.time(9,15):
+            if sl_flag and exit_time.time() == self.meta_start_time:
                 exit_price = scrip_df.loc[scrip_df['date_time'] == exit_time, 'close'].iloc[0]
 
             pnl = (exit_price - o) if orderside == 'BUY' else (o - exit_price)
@@ -1440,7 +1440,7 @@ class WeeklyBacktest(IntradayBacktest):
                     else:
                         future_high, future_low, future_close = future_data_row['high'], future_data_row['low'], future_data_row['close']
 
-                    if current_dt.time() != datetime.time(9,15) and (intra_upper_range <= future_high or future_low <= intra_lower_range):
+                    if (current_dt.time() != self.meta_start_time) and (intra_upper_range <= future_high or future_low <= intra_lower_range):
                         sl_flag = True
                         intra_sl_flag = True
                         exit_time = current_dt
@@ -1530,8 +1530,8 @@ class WeeklyBacktest(IntradayBacktest):
         try:
             scrip_df = self.get_single_leg_data(start_dt, end_dt, scrip).copy()
             if scrip_df.empty: raise DataEmptyError
-            scrip_df.loc[scrip_df['date_time'].dt.time == datetime.time(9,15), 'high'] = scrip_df['close']
-            scrip_df.loc[scrip_df['date_time'].dt.time == datetime.time(9,15), 'low'] = scrip_df['close']
+            scrip_df.loc[scrip_df['date_time'].dt.time == self.meta_start_time, 'high'] = scrip_df['close']
+            scrip_df.loc[scrip_df['date_time'].dt.time == self.meta_start_time, 'low'] = scrip_df['close']
 
             o = scrip_df['close'].iloc[0]
 

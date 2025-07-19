@@ -206,7 +206,7 @@ for idx, row in df.iterrows():
         if sys.platform == 'linux':
             proc = subprocess.Popen(['cmd.exe', '/c', 'start', 'wsl.exe', python_path, script_output, "-r", str(idx)])
         else:
-            proc = subprocess.Popen([python_path, script_output, "-r", str(idx)])
+            proc = subprocess.Popen([python_path, script_output, "-r", str(idx)], creationflags=subprocess.CREATE_NEW_CONSOLE)
         processes.append(proc)
         sleep(5)
 
@@ -240,7 +240,10 @@ while True:
 
                 if pending_files:
                     print(f"Running Row {proc.args[-1]}: {code_base}")
-                    proc = subprocess.Popen(proc.args)
+                    if sys.platform == 'linux':
+                        proc = subprocess.Popen(proc.args)
+                    else:
+                        proc = subprocess.Popen(proc.args, creationflags=subprocess.CREATE_NEW_CONSOLE)
                     sleep(5)
                     processes[idx] = proc
 
@@ -342,7 +345,7 @@ while True:
                     if sys.platform == 'linux':
                         proc = subprocess.Popen(['cmd.exe', '/c', 'start', 'wsl.exe', python_path, script_output, "-r", str(idx)])
                     else:
-                        proc = subprocess.Popen([python_path, script_output, "-r", str(idx)])
+                        proc = subprocess.Popen([python_path, script_output, "-r", str(idx)], creationflags=subprocess.CREATE_NEW_CONSOLE)
                     processes.append(proc)
                     sleep(5)
 

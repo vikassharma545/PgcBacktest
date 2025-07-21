@@ -76,8 +76,9 @@ class IntradayBacktest:
         self.straddle_indicator = lru_cache(maxsize=4096)(self._straddle_indicator)
 
     def get_future_option_path(self, index):
-        future_pickle_path = f'{self.pickle_path}{self.PREFIX.get(index.lower(), index)} Future/{{date}}_{index}_future.pkl'
-        option_pickle_path = f'{self.pickle_path}{self.PREFIX.get(index.lower(), index)} Options/{{date}}_{index}.pkl'
+        index_lower = index.lower()
+        future_pickle_path = f'{self.pickle_path}{self.PREFIX.get(index_lower, index)} Future/{{date}}_{index_lower}_future.pkl'
+        option_pickle_path = f'{self.pickle_path}{self.PREFIX.get(index_lower, index)} Options/{{date}}_{index_lower}.pkl'
         return future_pickle_path, option_pickle_path
 
     def Cal_slipage(self, price):

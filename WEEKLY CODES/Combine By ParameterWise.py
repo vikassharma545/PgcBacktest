@@ -1,139 +1,179 @@
 import os
 import gc
 import sys
-import pandas as pd
 import polars as pl
-from glob import glob
+import pandas as pd
+from tqdm import tqdm
 from time import sleep
+from pathlib import Path
 import concurrent.futures
 import dask.dataframe as dd
-os.system(f'title Combine By ParameterWise')
+from tkinter import Tk, filedialog
+
+os.environ["POLARS_MAX_THREADS"] = str(max(1, round(os.cpu_count() * 0.7)))
+pl.enable_string_cache()
 
 def print_heading(title="🗂 Folder Selection & Configuration"):
     print("\n" + "="*60)
     print(f"{title.center(60)}")
     print("="*60 + "\n")
 
-print_heading()
+def set_terminal_title(title: str):
+    if sys.platform == 'win32':
+        import ctypes
+        ctypes.windll.kernel32.SetConsoleTitleW(title)
+    else:  # Linux, macOS
+        sys.stdout.write(f"\33]0;{title}\a")
+        sys.stdout.flush()
 
-def list_and_select_directory(current_path='.'):
-    while True:
-        # List directories, excluding .ipynb
-        folders = [f for f in os.listdir(current_path) if os.path.isdir(os.path.join(current_path, f)) and '.ipynb' not in f and 'dashboard' not in f]
-        
-        # If no folders, return current path
-        if not folders:
-            return current_path
-
-        # Display folders
-        for i, f in enumerate(folders, 1):
-            print(f"{i}. {f}")
-        
-        # Get user selection
-        while True:
-            try:
-                idx = int(input("Pls Select Code: "))
-                if 1 <= idx <= len(folders):
-                    selected_folder = folders[idx - 1]
-                    print(f"\nSelected Code: {selected_folder}")
-                    # Update path and continue
-                    current_path = os.path.join(current_path, selected_folder)
-                    break
-            except ValueError:
-                pass
-            print("Invalid input. Try again.")
+def select_folder_gui(title="Select a Folder") -> Path | None:
+    root = Tk()
+    root.withdraw()  # Hide the main Tkinter window
+    folder_path = filedialog.askdirectory(title=title)
+    return Path(folder_path) if folder_path else None
         
 def get_bool_input(prompt):
     return input(f"{prompt} (y/n): ").strip().lower() == 'y'
 
 def get_parquet_files(folder_path):
-    EXT = "*.parquet"
-    return [file for path, subdir, files in os.walk(folder_path) for file in glob(os.path.join(path, EXT))]
+    root = Path(folder_path).expanduser().resolve()
+    iterator = root.rglob("*.parquet")
+    return sorted(iterator)
 
 def get_code_index_cols(parquet_files):
-    code = parquet_files[0].split('\\')[-1].split(' ')[2]
-    indices = sorted(set([f.split('\\')[-1].split(' ')[0] for f in parquet_files]))
+    code = parquet_files[0].stem.split()[2]
+    indices = sorted(set([f.stem.split()[0] for f in parquet_files]))
     
     df = pd.read_parquet(max(parquet_files, key=lambda f: os.path.getsize(f)))
     name_columns = [c for c in list(df.columns) if c.startswith('P_')]
     pnl_columns = [c for c in list(df.columns) if c.endswith('PNL')]
     return code, indices, name_columns, pnl_columns
 
-parquet_files_folder_path = list_and_select_directory()
-only_mtm_col = get_bool_input("Grouping with MTM columns only?")
-use_polars = get_bool_input("Use Polars (fastest) instead of (Pandas/Dask)?")
+def check_parquet_file(file):
+    try:
+        pl.read_parquet(file)
+        return None
+    except Exception as e:
+        return f"Error reading file {file}: {e}"
 
-parquet_files = get_parquet_files(parquet_files_folder_path)
-if parquet_files:
-    code, indices, name_columns, pnl_columns = get_code_index_cols(parquet_files)
-    print()
-    print(f"Total File Uploaded :- {len(parquet_files)}")
-    print(f"Code :- {code}")
-    print(f"Indices :- {indices}")
-    print(f"Parameter cols :- {', '.join(name_columns)}")
-    print(f"PNL cols :- {', '.join(pnl_columns)}")
-    print('Use Polars :-', use_polars)
-else:
-    print("No Parquet files found in the provided folder path.")
-    input("\nPress Enter to Exit !!!")
+if __name__ == "__main__":
 
-combine_folder_path = parquet_files_folder_path.replace('_output', '_output_ParameterWise')
-os.makedirs(combine_folder_path, exist_ok=True)
+    title = "Combine By ParameterWise"
+    set_terminal_title(title)
+    print_heading(title)
+        
+    # select folder containing Parquet files
+    print("\nSelect Output Folder: ", end="")
+    parquet_files_folder_path = select_folder_gui(title="Select Folder containing Parquet files")
+    
+    if parquet_files_folder_path:
+        
+        print(parquet_files_folder_path)
+        # Get all Parquet files in the selected folder
+        parquet_files = get_parquet_files(parquet_files_folder_path)
+        
+        if parquet_files:
+            code, indices, name_columns, pnl_columns = get_code_index_cols(parquet_files)
+            print()
+            print(f"Total File Uploaded :- {len(parquet_files)}")
+            print(f"Code :- {code}")
+            print(f"Indices :- {indices}")
+            print(f"Parameter cols :- {', '.join(name_columns)}")
+            print(f"PNL cols :- {', '.join(pnl_columns)}")
+        else:
+            print("No Parquet files found in the provided folder path.")
+            input("\nPress Enter to Exit !!!")
+            sys.exit(0)
+        
+    else:
+        print("No folder selected. :(")
+        input("Press Enter to Exit !!!")
+        sys.exit(0)
 
-if input("Proceed with execution? (y/n): ").strip().lower() != 'y':
-    print('❌ Execution cancelled.')
-    sleep(2)
-    sys.exit(0)
+    only_mtm_col = get_bool_input("Grouping with MTM columns only?")
+    use_polars = get_bool_input("Use Polars (fastest) instead of (Pandas/Dask)?")
+    
+    ### checking parquet files
+    print("\nChecking Parquet Files...")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=7) as executor:
+        results = list(tqdm(executor.map(check_parquet_file, parquet_files), total=len(parquet_files), desc="Checking Parquet Files"))
 
-print()
-print('Building ParameterWise Files... \n')
+    errors = [r for r in results if r]
+    error_files = [parquet_files[i] for i, r in enumerate(results) if r]
 
-for index in indices:
-    chunk_nos = sorted(set([k.split('-')[-1].split('.')[0] for k in glob(f'{parquet_files_folder_path}/{index}*')]))
-    for chunk_no in chunk_nos:
-        try:
-            all_files = glob(f'{parquet_files_folder_path}/{index}*No-{chunk_no}.parquet')
-            print(f'\nTotal file in {index} Chunks-{chunk_no} -', len(all_files))
-            if len(all_files) == 0:continue
-
-            print('Reading Chunks...')
-            if use_polars:
-                df = pl.read_parquet(all_files, columns=(name_columns+pnl_columns) if only_mtm_col else None, use_pyarrow=True)
-            else:
-                df = dd.read_parquet(all_files, columns=(name_columns+pnl_columns) if only_mtm_col else None)
-                df = df.compute()
-            print('Reading Complete...')
-
-            os.makedirs(f"{combine_folder_path}/{index}", exist_ok=True)
-            print('Grouping Chunks...')
-            if use_polars:
-                grouped = df.group_by(name_columns)
-            else:
-                grouped = df.groupby(name_columns)
-            print('Grouping Complete...')
-
-            def save_file(idx, data):
+    if errors:
+        for err in errors:
+            print(err)
+        if input("Delete all error files? (y/n): ").strip().lower() == 'y':
+            for f in error_files:
                 try:
-                    file_name = ' '.join(map(str, idx)).replace(":00 ", " ").replace(":", "") + '.parquet'
-                    if use_polars:
-                        data.write_parquet(f"{combine_folder_path}/{index}/{file_name}")
-                    else:
-                        data.to_parquet(f"{combine_folder_path}/{index}/{file_name}", index=False)
+                    os.remove(f)
+                    print(f"Deleted: {f}")
                 except Exception as e:
-                    print(e)
+                    print(f"Failed to delete {f}: {e}")
+        input("Press Enter to Exit !!!")
+        sys.exit(0)
+    print("All Parquet files are valid.\n")
+    
+    if input("Proceed with execution? (y/n): ").strip().lower() != 'y':
+        print('❌ Execution cancelled.')
+        sleep(2)
+        sys.exit(0)
+    
+    
+    combine_folder_path = Path(str(parquet_files_folder_path).replace('_output', '_output_ParameterWise'))
+    os.makedirs(combine_folder_path, exist_ok=True)
 
-            print(f"🧩 {index} - Chunk {chunk_no}: Saving grouped files...")
-            with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count()*7) as executor:
-                for idx, data in grouped:
-                    executor.submit(save_file, idx, data)
-                    
-            del df, grouped
-            sleep(1)
-            gc.collect()
-            sleep(4)
-            
-        except Exception as e:
-            input(f"ERROR !!! {e}")
-            
-print("Done\n")
-input("Press Enter to Exit !!!")
+    print('\nBuilding ParameterWise Files... \n')
+    for index in indices:
+        
+        index_files = [f for f in parquet_files if f.stem.split()[0] == index]
+        
+        chunk_nos = sorted(set([f.stem.split()[-1] for f in index_files]))
+        
+        for chunk_no in chunk_nos:
+            try:
+                chunks_file = [f for f in index_files if f.stem.split()[-1] == chunk_no]
+                print(f'\nTotal file in {index} Chunks-{chunk_no} -', len(chunks_file))
+                if len(chunks_file) == 0: continue
+
+                print('Reading Chunks...')
+                if use_polars:
+                    df = pl.read_parquet(chunks_file, columns=(name_columns+pnl_columns) if only_mtm_col else None, use_pyarrow=True)
+                else:
+                    df = dd.read_parquet(chunks_file, columns=(name_columns+pnl_columns) if only_mtm_col else None)
+                    df = df.compute()
+                print('Reading Complete...')
+
+                os.makedirs(f"{combine_folder_path}/{index}", exist_ok=True)
+                print('Grouping Chunks...')
+                if use_polars:
+                    grouped = df.group_by(name_columns)
+                else:
+                    grouped = df.groupby(name_columns)
+                print('Grouping Complete...')
+
+                def save_file(idx, data):
+                    try:
+                        file_name = ' '.join(map(str, idx)).replace(":00 ", " ").replace(":", "") + '.parquet'
+                        if use_polars:
+                            data.write_parquet(f"{combine_folder_path}/{index}/{file_name}")
+                        else:
+                            data.to_parquet(f"{combine_folder_path}/{index}/{file_name}", index=False)
+                    except Exception as e:
+                        print(e)
+
+                print(f"🧩 {index} - Chunk {chunk_no}: Saving grouped files...")
+                with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count()*7) as executor:
+                    for idx, data in grouped:
+                        executor.submit(save_file, idx, data)
+                        
+                del df, grouped
+                sleep(1)
+                gc.collect()
+                
+            except Exception as e:
+                input(f"ERROR !!! {e}")
+                
+    print("Done\n")
+    input("Press Enter to Exit !!!")

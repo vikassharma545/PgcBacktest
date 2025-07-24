@@ -30,17 +30,21 @@ def set_terminal_title(title: str):
 
 def select_folder_gui(title="Select a Folder") -> Path | None:
     root = Tk()
-    root.withdraw()  # Hide the main Tkinter window
-    folder_path = filedialog.askdirectory(title=title)
+    root.withdraw()
+    root.attributes('-topmost', True) 
+    folder_path = filedialog.askdirectory(title=title, parent=root)
+    root.destroy() 
     return Path(folder_path) if folder_path else None
 
 def select_file_gui(title="Select a File", filetypes=None) -> Path | None:
-    
-    if filetypes is None: filetypes = [("All files", "*.*")]
-    
+    if filetypes is None:
+        filetypes = [("All files", "*.*")]
+
     root = Tk()
     root.withdraw()
-    file_path = filedialog.askopenfilename(title=title, filetypes=filetypes)
+    root.attributes('-topmost', True)  # Ensure the dialog appears on top
+    file_path = filedialog.askopenfilename(title=title, filetypes=filetypes, parent=root)
+    root.destroy()
     return Path(file_path) if file_path else None
     
 def get_bool_input(prompt):

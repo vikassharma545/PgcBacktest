@@ -29,7 +29,7 @@ def select_folder_gui(title="Select a Folder") -> Path | None:
     root.attributes('-topmost', True) 
     folder_path = filedialog.askdirectory(title=title, parent=root)
     root.destroy() 
-    return Path(folder_path) if folder_path else None
+    return Path(folder_path).as_posix() + "/" if folder_path else None
 
 def select_file_gui(title="Select a File", filetypes=None) -> Path | None:
     if filetypes is None:

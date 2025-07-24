@@ -291,6 +291,8 @@ if __name__ == "__main__":
 
                 if pending_files:
 
+                    print(f"found closed process in Row {idx}.")
+                    print(f"Pending Files in Row {idx}: {len(pending_files)}")
                     print(f"Running Row {idx}. ")
 
                     if sys.platform == 'linux':
@@ -312,12 +314,14 @@ if __name__ == "__main__":
                         proc = psutil.Process(script_pid)
                         new_processes.append((idx, proc))
                     except psutil.NoSuchProcess:
-                        pass
+                        print(f'Process not Found in Row {idx}')
                     
             else:
                 new_processes.append((idx, proc))
                 
         processes = new_processes
+        print(f"\nRunning Processes: {len(processes)}")
+        print(f"Allowed Processes: {no_of_terminal_allowed}")
 
         if len(processes) < int(no_of_terminal_allowed*0.7) and no_of_terminal_allowed != -1:
 
@@ -326,6 +330,8 @@ if __name__ == "__main__":
                     proc.terminate()
                     proc.wait(timeout=2)
                     print(f"Killed - {idx}")
+                except psutil.NoSuchProcess:
+                    print(f"Process already terminated - {idx}")
                 except psutil.TimeoutExpired:
                     proc.kill()
                     print(f"Forced kill - {idx}")

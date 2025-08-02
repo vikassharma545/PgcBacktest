@@ -28,24 +28,59 @@ def set_terminal_title(title: str):
         sys.stdout.write(f"\33]0;{title}\a")
         sys.stdout.flush()
 
-def select_folder_gui(title="Select a Folder") -> Path | None:
+def select_folder_gui(title="Select a Folder", initialdir=".") -> Path | None:
     root = Tk()
     root.withdraw()
     root.attributes('-topmost', True) 
-    folder_path = filedialog.askdirectory(title=title, parent=root)
+    folder_path = filedialog.askdirectory(title=title, initialdir=initialdir, parent=root)
     root.destroy() 
     return Path(folder_path) if folder_path else None
 
-def select_file_gui(title="Select a File", filetypes=None) -> Path | None:
+def select_file_gui(title="Select a File", filetypes=None, initialdir=".") -> Path | None:
     if filetypes is None:
         filetypes = [("All files", "*.*")]
 
     root = Tk()
     root.withdraw()
-    root.attributes('-topmost', True)  # Ensure the dialog appears on top
-    file_path = filedialog.askopenfilename(title=title, filetypes=filetypes, parent=root)
+    root.attributes('-topmost', True)
+    file_path = filedialog.askopenfilename(title=title, filetypes=filetypes, initialdir=initialdir, parent=root)
     root.destroy()
     return Path(file_path) if file_path else None
+
+def get_dte_csv_path(files_indices):
+    
+    if sys.platform == "win32":
+        base_dir = "C:"
+    elif sys.platform == "linux":
+        base_dir = os.environ['HOME'] # "/home/user"
+    else:
+        print("OS not Defined !!!")
+        print("\nSelect DTE CSV File: ")
+        dte_csv_path = select_file_gui(title="Select DTE CSV File", filetypes=[("CSV files", "*.csv")])
+        return dte_csv_path
+    
+    indices = ['BANKNIFTY', 'NIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'BANKEX', 'SENSEX']
+    if all(index in indices for index in files_indices):
+        dte_csv_path = f"{base_dir}/PICKLE/DTE.csv"
+        if os.path.exists(dte_csv_path):
+            return dte_csv_path
+    
+    indices = ['COPPER', 'CRUDEOIL', 'CRUDEOILM', 'GOLD', 'GOLDM', 'NATURALGAS', 'NATGASMINI', 'SILVER', 'SILVERM', 'ZINC']
+    if all(index in indices for index in files_indices):
+        dte_csv_path = f"{base_dir}/MCXPICKLE/DTE.csv"
+        if os.path.exists(dte_csv_path):
+            return dte_csv_path
+        
+    indices = ['SPXW_FRI', 'SPXW_MON', 'SPXW_THU', 'SPXW_TUE', 'SPX_WED', 'XSP_FRI', 'XSP_MON', 'XSP_THU', 'XSP_TUE', 'XSP_WED']
+    indices += ['TSLA', 'AAPL', 'NVDA', 'AMZN', 'META', 'AMD', 'MSFT', 'NFLX', 'GME', 'BABA']
+    if all(index in indices for index in files_indices):
+        dte_csv_path = f"{base_dir}/USPICKLE/DTE.csv"
+        if os.path.exists(dte_csv_path):
+            return dte_csv_path
+    
+    print("\nSelect DTE CSV File: ")
+    dte_csv_path = select_file_gui(title="Select DTE CSV File", filetypes=[("CSV files", "*.csv")])
+    return dte_csv_path
     
 def get_bool_input(prompt):
     return input(f"{prompt} (y/n): ").strip().lower() == 'y'
@@ -71,16 +106,17 @@ def check_parquet_file(file):
     except Exception as e:
         return f"Error reading file {file}: {e}"
 
-def get_year_dte_files(parquet_files):
-    year_dte_files = {}
+def get_year_day_dte_files(parquet_files):
+    year_day_dte_files = {}
     for file in parquet_files:
         index = file.stem.split()[0]
         date = datetime.datetime.strptime(file.stem.split()[1], "%Y-%m-%d")
         year = date.year
-        dte = file.stem.split()[3].replace('-', '_')
-        year_dte_files[f'{index}-{year}-{dte}'] = year_dte_files.get(f'{index}-{year}-{dte}', []) + [file]
+        day = date.strftime('%A')
+        dte = dte_file.loc[date, index]
+        year_day_dte_files[f'{index}-{year}-{day}-{dte}'] = year_day_dte_files.get(f'{index}-{year}-{day}-{dte}', []) + [file]
 
-    return year_dte_files
+    return year_day_dte_files
 
 if __name__ == "__main__":
     
@@ -88,22 +124,6 @@ if __name__ == "__main__":
     title = "DashBoard FileMaker"
     set_terminal_title(title)
     print_heading(title)
-
-    # select DTE CSV file
-    print("\nSelect DTE CSV File: ", end="")
-    dte_csv_path = select_file_gui(
-        title="Select DTE CSV File",
-        filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
-    )
-    
-    if dte_csv_path:
-        print(dte_csv_path)
-        # Read DTE CSV file
-        dte_file = pd.read_csv(dte_csv_path, parse_dates=['Date'], dayfirst=True).set_index("Date")
-    else:
-        print("No DTE CSV file selected. :(")
-        input("Press Enter to Exit...")
-        sys.exit(0)
         
     # select folder containing Parquet files
     print("\nSelect Output Folder: ", end="")
@@ -131,6 +151,17 @@ if __name__ == "__main__":
     else:
         print("No folder selected. :(")
         input("Press Enter to Exit !!!")
+        sys.exit(0)
+        
+    # select DTE CSV file
+    dte_csv_path = get_dte_csv_path(indices)
+    if dte_csv_path:
+        print(f"\nDTE CSV Path: {dte_csv_path}")
+        # Read DTE CSV file
+        dte_file = pd.read_csv(dte_csv_path, parse_dates=['Date'], dayfirst=True).set_index("Date")
+    else:
+        print("No DTE CSV file selected. :(")
+        input("Press Enter to Exit...")
         sys.exit(0)
     
     use_polars = get_bool_input("\nUse Polars (fastest) instead of Pandas/Dask?")
@@ -161,27 +192,27 @@ if __name__ == "__main__":
         print('❌ Execution cancelled.')
         sleep(2)
         sys.exit(0)
-
+        
     max_row = 500000
     dashboard_folder_path = Path(str(parquet_files_folder_path).replace('_output', '_dashboard'))
     os.makedirs(dashboard_folder_path, exist_ok=True)
-    year_dte_files = get_year_dte_files(parquet_files)
+    year_day_dte_files = get_year_day_dte_files(parquet_files)
 
     print('\nBuilding DashBoard Files... \n')
     for index in indices:
         try:
             os.makedirs(f"{dashboard_folder_path}/{index}", exist_ok=True)
 
-            for key, value in year_dte_files.items():
-                check_index, year, dte = key.split('-')
+            for key, value in year_day_dte_files.items():
+                check_index, year, day, dte = key.split('-')
                 if check_index != index: continue
 
                 dashboard_data_list = []
-                chunks = sorted(set([f.stem.split()[-1] for f in year_dte_files[key]]), key=lambda x: int(x.split('-')[-1]))
+                chunks = sorted(set([f.stem.split()[-1] for f in year_day_dte_files[key]]), key=lambda x: int(x.split('-')[-1]))
                 for chunk in chunks:
 
-                    print(index, year, dte, chunk)
-                    chunks_file = [f for f in year_dte_files[key] if f.stem.split()[-1] == chunk]
+                    print(index, year, day, dte, chunk)
+                    chunks_file = [f for f in year_day_dte_files[key] if f.stem.split()[-1] == chunk]
 
                     if use_polars:
                         def read_and_cast(path):
@@ -198,7 +229,8 @@ if __name__ == "__main__":
 
                         data = data.with_columns([
                             pl.lit(int(year)).cast(pl.Int16).alias("Year"),
-                            pl.lit(dte).cast(pl.Categorical).alias("Start.DTE-End.DTE")
+                            pl.lit(day).cast(pl.Categorical).alias("Day"),
+                            pl.lit(int(float(dte))).cast(pl.Int8).alias("DTE")
                         ])
                     else:
                         data = dd.read_parquet(chunks_file, columns=(name_columns+pnl_columns))
@@ -206,8 +238,8 @@ if __name__ == "__main__":
                         data = data.groupby(name_columns).sum(numeric_only=True)[pnl_columns].reset_index()
                         data = data.melt(id_vars=name_columns, value_vars=pnl_columns, var_name='PL Basis', value_name='Points')
                         data.columns = [c.replace('P_','') for c in data.columns]
-                        data[['Year', 'Start.DTE-End.DTE']] = np.int16(year), str(dte)
-
+                        data[['Year', 'Day', 'DTE']] = np.int16(year), day, np.int8(float(dte))
+                        
                     dashboard_data_list.append(data)
 
                 if use_polars:
@@ -218,7 +250,7 @@ if __name__ == "__main__":
                         chunk_size = max_row
                         for idx, i in enumerate(range(0, len(pnl_data), chunk_size), start=1):
                             chunk_data = pnl_data.slice(i, chunk_size)
-                            chunk_data.write_csv(f"{dashboard_folder_path}/{index}/{code}-{year}-{dte}-{pnl_col}-No-{idx}.csv")
+                            chunk_data.write_csv(f"{dashboard_folder_path}/{index}/{code}-{year}-{day}-{dte}-{pnl_col}-No-{idx}.csv")
                 else:
                     dashboard_data = pd.concat(dashboard_data_list, ignore_index=True)
                     dashboard_data[dashboard_data.select_dtypes(include=['object']).columns] = dashboard_data.select_dtypes(include=['object']).astype('category')
@@ -228,7 +260,7 @@ if __name__ == "__main__":
                         chunk_size = max_row
                         for idx, i in enumerate(range(0, len(pnl_data), chunk_size), start=1):
                             chunk_data = pnl_data.iloc[i:i + chunk_size]
-                            chunk_data.to_csv(f"{dashboard_folder_path}/{index}/{code}-{year}-{dte}-{pnl_col}-No-{idx}.csv", index=False)
+                            chunk_data.to_csv(f"{dashboard_folder_path}/{index}/{code}-{year}-{day}-{dte}-{pnl_col}-No-{idx}.csv", index=False)
 
                 del dashboard_data
                 del dashboard_data_list
@@ -237,6 +269,6 @@ if __name__ == "__main__":
 
         except Exception as e:
             input(f"ERROR !!! {e}")
-            
+        
     print("Done\n")
     input("Press Enter to Exit !!!")

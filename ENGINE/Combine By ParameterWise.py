@@ -26,22 +26,22 @@ def set_terminal_title(title: str):
         sys.stdout.write(f"\33]0;{title}\a")
         sys.stdout.flush()
 
-def select_folder_gui(title="Select a Folder") -> Path | None:
+def select_folder_gui(title="Select a Folder", initialdir=".") -> Path | None:
     root = Tk()
     root.withdraw()
     root.attributes('-topmost', True) 
-    folder_path = filedialog.askdirectory(title=title, parent=root)
+    folder_path = filedialog.askdirectory(title=title, initialdir=initialdir, parent=root)
     root.destroy() 
     return Path(folder_path) if folder_path else None
 
-def select_file_gui(title="Select a File", filetypes=None) -> Path | None:
+def select_file_gui(title="Select a File", filetypes=None, initialdir=".") -> Path | None:
     if filetypes is None:
         filetypes = [("All files", "*.*")]
 
     root = Tk()
     root.withdraw()
-    root.attributes('-topmost', True)  # Ensure the dialog appears on top
-    file_path = filedialog.askopenfilename(title=title, filetypes=filetypes, parent=root)
+    root.attributes('-topmost', True)
+    file_path = filedialog.askopenfilename(title=title, filetypes=filetypes, initialdir=initialdir, parent=root)
     root.destroy()
     return Path(file_path) if file_path else None
         

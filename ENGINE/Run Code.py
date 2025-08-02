@@ -476,7 +476,7 @@ if __name__ == "__main__":
                     proc.kill()
                     print(f"Forced kill - {idx}")
 
-            no_of_terminal_allowed = create_temp_meta_data(index_dte_dates, meta_data, temp_meta_data_path, no_of_terminal_allowed)
+            no_of_terminal_allowed = create_temp_meta_data(index_dte_dates, meta_data, temp_meta_data_path, no_of_terminal_allowed, is_weekly)
 
             ### Run the converted script
             print('\nCode is About to Restart in ...')

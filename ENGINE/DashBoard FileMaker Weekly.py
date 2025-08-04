@@ -1,6 +1,7 @@
 import os
 import gc
 import sys
+import shutil
 import datetime
 import numpy as np
 import polars as pl
@@ -194,6 +195,7 @@ if __name__ == "__main__":
 
     max_row = 500000
     dashboard_folder_path = Path(str(parquet_files_folder_path).replace('_output', '_dashboard'))
+    shutil.rmtree(dashboard_folder_path, ignore_errors=True)
     os.makedirs(dashboard_folder_path, exist_ok=True)
     year_dte_files = get_year_dte_files(parquet_files)
 

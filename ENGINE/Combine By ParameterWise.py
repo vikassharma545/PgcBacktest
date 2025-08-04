@@ -1,6 +1,7 @@
 import os
 import gc
 import sys
+import shutil
 import polars as pl
 import pandas as pd
 from tqdm import tqdm
@@ -135,6 +136,7 @@ if __name__ == "__main__":
     
     
     combine_folder_path = Path(str(parquet_files_folder_path).replace('_output', '_output_ParameterWise'))
+    shutil.rmtree(combine_folder_path, ignore_errors=True)
     os.makedirs(combine_folder_path, exist_ok=True)
 
     print('\nBuilding ParameterWise Files... \n')

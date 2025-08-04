@@ -6,8 +6,11 @@ import nbformat
 import tempfile
 import subprocess
 import pandas as pd
+import polars as pl
+from tqdm import tqdm
 from time import sleep
 from pathlib import Path
+import concurrent.futures
 from tkinter import Tk, filedialog
 from nbconvert import PythonExporter
 
@@ -264,6 +267,26 @@ def create_temp_meta_data(index_dte_dates, meta_data, temp_meta_data_path, no_of
     
     return no_of_terminal_allowed
 
+def checking_all_parquet_file(output_csv_path):
+
+    def check_parquet_file(file):
+        try:
+            pl.read_parquet(file)
+            return None
+        except Exception as e:
+            return f"Error reading file {file}: {e}"
+
+    print("\nChecking ALL Parquet Files...")
+    parquet_files = [os.path.join(output_csv_path, f) for f in os.listdir(output_csv_path) if f.endswith("parquet")]
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=7) as executor:
+        results = list(tqdm(executor.map(check_parquet_file, parquet_files), total=len(parquet_files), desc="Checking Parquet Files"))
+
+    errors = [r for r in results if r]
+    error_files = [parquet_files[i] for i, r in enumerate(results) if r]
+
+    return errors, error_files
+
 if __name__ == "__main__":
     
     # Set terminal title    
@@ -413,6 +436,22 @@ if __name__ == "__main__":
         print(f'Total Pending Files: {total_pending_dates*no_of_chunk}')
         if total_pending_dates == 0:
             print(f'\nNo Pending {weeks_or_dates} Left all Dates files Complete :)')
+
+            errors, error_files = checking_all_parquet_file(output_csv_path)
+            
+            if errors:
+                for err, error_file in zip(errors, error_files):
+                    print(err)
+                    try:
+                        os.remove(error_file)
+                        print(f"Deleted: {error_file}")
+                    except Exception as e:
+                        print(f"Failed to delete {error_file}: {e}")
+
+                continue
+            else:
+                print("All Parquet files are valid.\n")
+
             input("Press Enter to Exit !!!")
             sys.exit()
 

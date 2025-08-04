@@ -247,14 +247,18 @@ def create_temp_meta_data(index_dte_dates, meta_data, temp_meta_data_path, no_of
             
         else:
             # For Weekly Codes
+            temp_meta_data = meta_data[meta_data['run'] == True].copy()
+            temp_meta_data = temp_meta_data[temp_meta_data.apply(lambda row: (row['index'], row['from_dte'], row['to_dte']) in index_dte_dates.keys(), axis=1)]
             
-            if len(meta_data) < no_of_terminal_allowed:
+            if len(temp_meta_data) < no_of_terminal_allowed:
                 no_of_terminal_allowed = -1
             else:
-                temp_meta_data = meta_data.iloc[:no_of_terminal_allowed]
-                temp_meta_data.to_csv(temp_meta_data_path, index=False)
+                temp_meta_data = temp_meta_data.iloc[:no_of_terminal_allowed]
+
+            temp_meta_data.to_csv(temp_meta_data_path, index=False)
     else:
-        meta_data.to_csv(temp_meta_data_path, index=False)
+        temp_meta_data = meta_data[meta_data['run'] == True].copy()
+        temp_meta_data.to_csv(temp_meta_data_path, index=False)
 
     print(f'MetaData Created: {temp_meta_data_path}')
     

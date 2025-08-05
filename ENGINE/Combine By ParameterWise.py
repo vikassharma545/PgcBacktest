@@ -9,6 +9,7 @@ from time import sleep
 from pathlib import Path
 import concurrent.futures
 import dask.dataframe as dd
+import pyarrow.parquet as pq
 from tkinter import Tk, filedialog
 
 os.environ["POLARS_MAX_THREADS"] = str(max(1, round(os.cpu_count() * 0.7)))
@@ -65,10 +66,10 @@ def get_code_index_cols(parquet_files):
 
 def check_parquet_file(file):
     try:
-        pl.read_parquet(file)
+        table = pq.read_table(file)
         return None
     except Exception as e:
-        return f"Error reading file {file}: {e}"
+        return (f"Invalid file: {file} | Error: {e}")
 
 if __name__ == "__main__":
 

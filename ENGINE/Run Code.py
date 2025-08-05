@@ -11,6 +11,7 @@ from tqdm import tqdm
 from time import sleep
 from pathlib import Path
 import concurrent.futures
+import pyarrow.parquet as pq
 from tkinter import Tk, filedialog
 from nbconvert import PythonExporter
 
@@ -271,10 +272,10 @@ def checking_all_parquet_file(output_csv_path):
 
     def check_parquet_file(file):
         try:
-            pl.read_parquet(file)
+            table = pq.read_table(file)
             return None
         except Exception as e:
-            return f"Error reading file {file}: {e}"
+            return (f"Invalid file: {file} | Error: {e}")
 
     print("\nChecking ALL Parquet Files...")
     parquet_files = [os.path.join(output_csv_path, f) for f in os.listdir(output_csv_path) if f.endswith("parquet")]

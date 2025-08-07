@@ -58,7 +58,7 @@ def get_meta_row_data(meta_row, pickle_path, weekly=False, monthly=False):
         return index, dte, from_date, to_date, start_time, end_time, date_lists
     elif weekly:
         from_dte, to_dte = int(meta_row['from_dte']), int(meta_row['to_dte'])
-        date_lists = dte_file.loc[(dte_file.index >= from_date) & (dte_file.index <= to_date)].index.to_list()
+        date_lists = dte_file.loc[(dte_file.index >= from_date) & (dte_file.index <= to_date) & (~dte_file[index].isna())].index.to_list()
         
         week_dates, week_lists = [], []
         prev_dte = 99

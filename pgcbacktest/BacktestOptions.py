@@ -35,8 +35,8 @@ def get_strike(scrip):
 
 chunk_size = 100_000
 def is_file_exists(output_csv_path, file_name, parameter_size, dir_files=None):
-    
-    if not dir_files:
+
+    if dir_files is None:
         dir_files = set(os.listdir(output_csv_path))
         
     total_chunks = (parameter_size - 1) // chunk_size + 1

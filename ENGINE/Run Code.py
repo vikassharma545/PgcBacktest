@@ -179,6 +179,7 @@ def get_file_details(meta_data, pickle_path, output_csv_path, code, parameter_le
     index_dates = {}
     index_dte_dates = {}
     total_dates, total_pending_dates = 0, 0
+    dir_files = set(os.listdir(output_csv_path)) if os.path.exists(output_csv_path) else set()
     for row_idx in range(len(meta_data)):
         if meta_data.loc[row_idx, 'run']:
             meta_row = meta_data.iloc[row_idx]
@@ -187,8 +188,8 @@ def get_file_details(meta_data, pickle_path, output_csv_path, code, parameter_le
                 index, dte, _, _, _, _, date_lists = get_meta_row_data(meta_row, pickle_path)
                 total_dates += len(date_lists)
                 index_dates[index] = index_dates.get(index, 0) + len(date_lists)
-                files_dates = [current_date.date() for current_date in date_lists if not is_file_exists(output_csv_path, f"{index} {current_date.date()} {code}", parameter_len)]
-            
+                files_dates = [current_date.date() for current_date in date_lists if not is_file_exists(output_csv_path, f"{index} {current_date.date()} {code}", parameter_len, dir_files)]
+
                 if files_dates:
                     total_pending_dates += len(files_dates)
                     index_dte_dates[(index, dte)] = sorted(index_dte_dates.get((index, dte), []) + files_dates)
@@ -197,7 +198,7 @@ def get_file_details(meta_data, pickle_path, output_csv_path, code, parameter_le
                 index, from_dte, to_dte, _, _, _, _, week_lists = get_meta_row_data(meta_row, pickle_path, weekly=True)
                 total_dates += len(week_lists)
                 index_dates[index] = index_dates.get(index, 0) + len(week_lists)
-                files_dates = [week_dates for week_dates in week_lists if not is_file_exists(output_csv_path, f"{index} {week_dates[0].date()} {week_dates[-1].date()} {from_dte}-{to_dte} {code}", parameter_len)]
+                files_dates = [week_dates for week_dates in week_lists if not is_file_exists(output_csv_path, f"{index} {week_dates[0].date()} {week_dates[-1].date()} {from_dte}-{to_dte} {code}", parameter_len, dir_files)]
 
                 if files_dates:
                     total_pending_dates += len(files_dates)
@@ -459,6 +460,7 @@ if __name__ == "__main__":
         ### checking script is running
         new_processes = []
         df = pd.read_csv(temp_meta_data_path)
+        dir_files = set(os.listdir(output_csv_path)) if os.path.exists(output_csv_path) else set()
         for idx, proc in processes:
             if not proc.is_running():
                 
@@ -466,10 +468,10 @@ if __name__ == "__main__":
                 
                 if not is_weekly:
                     index, dte, _, _, _, _, date_lists = get_meta_row_data(meta_row, pickle_path)
-                    pending_files = [current_date.date() for current_date in date_lists if not is_file_exists(output_csv_path, f"{index} {current_date.date()} {code}", parameter_len)]
+                    pending_files = [current_date.date() for current_date in date_lists if not is_file_exists(output_csv_path, f"{index} {current_date.date()} {code}", parameter_len, dir_files)]
                 else:
                     index, from_dte, to_dte, _, _, _, _, week_lists = get_meta_row_data(meta_row, pickle_path, weekly=True)
-                    pending_files = [week_dates for week_dates in week_lists if not is_file_exists(output_csv_path, f"{index} {week_dates[0].date()} {week_dates[-1].date()} {from_dte}-{to_dte} {code}", parameter_len)]
+                    pending_files = [week_dates for week_dates in week_lists if not is_file_exists(output_csv_path, f"{index} {week_dates[0].date()} {week_dates[-1].date()} {from_dte}-{to_dte} {code}", parameter_len, dir_files)]
 
                 if pending_files:
 

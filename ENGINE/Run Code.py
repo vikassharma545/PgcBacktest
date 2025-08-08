@@ -419,9 +419,7 @@ if __name__ == "__main__":
 
     while True:
         
-        fun_timer(5)
-        os.system('clear') if sys.platform == 'linux' else os.system('cls')
-                
+        fun_timer(10)
         index_dates, index_dte_dates, total_dates, total_pending_dates = get_file_details(meta_data, pickle_path, output_csv_path, code, parameter_len, is_weekly)
 
         file_details = f'\n####### OUTPUT FILES #######\
@@ -431,6 +429,7 @@ if __name__ == "__main__":
                         \n{weeks_or_dates} IndexWise: {index_dates} \
                         \n############################'
 
+        os.system('clear') if sys.platform == 'linux' else os.system('cls')
         print(code_details)
         print(file_details)
 

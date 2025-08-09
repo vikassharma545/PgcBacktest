@@ -284,6 +284,24 @@ def get_parameter_data(code, parameter_path):
         #filer intra sl
         parameter['sre_intra_sl'] = parameter.apply(lambda row: row['sre_sl'] + float(row['sre_intra_sl'].split('+')[-1]) if '+' in str(row['sre_intra_sl']) else float(row['sre_intra_sl']), axis=1)
         parameter = parameter[~((parameter['sre_intra_sl'] != 0) & (parameter['sre_intra_sl'] <= parameter['sre_sl']))]
+        
+    elif (code == 'DT_FS_SUT'):
+        # filter - where dt_sl = 0
+        parameter.loc[parameter['dt_sl'] == 0, 'method'] = 'HL'
+        
+        parameter['orderside'] = parameter['orderside'].str.upper()
+        parameter['method'] = parameter['method'].str.upper()
+        
+        #filer intra sl
+        parameter['sut_intra_sl'] = parameter.apply(lambda row: row['sut_sl'] + float(row['sut_intra_sl'].split('+')[-1]) if '+' in str(row['sut_intra_sl']) else float(row['sut_intra_sl']), axis=1)
+        parameter = parameter[~((parameter['sut_intra_sl'] != 0) & (parameter['sut_intra_sl'] < parameter['sut_sl']))]
+
+    elif (code == 'DT_FS_UT'):
+        # filter - where fsl = 0
+        parameter.loc[(parameter['fsl'] == 0) & (parameter['ssl'] == 0), 'method'] = 'HL'
+        
+        parameter['orderside'] = parameter['orderside'].str.upper()
+        parameter['method'] = parameter['method'].str.upper()
 
     elif (code == 'DT_PSL') or (code == 'DT_SI_PSL') or (code == 'DT_RE_PSL'):
         parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]

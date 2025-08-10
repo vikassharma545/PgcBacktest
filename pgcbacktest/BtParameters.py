@@ -137,7 +137,14 @@ def get_parameter_data(code, parameter_path):
         
         if code == 'B120_SI':
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
+ 
+    if (code == 'B120_RE_UT'):
+    
+        parameter.loc[parameter['sl'] == 0, 'ut_sl'] = 0
+        parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
         
+        parameter['orderside'] = parameter['orderside'].str.upper()
+        parameter['method'] = parameter['method'].str.upper()
 
     elif (code == 'B120_PSL') or (code == 'B120_SI_PSL'):
         

@@ -53,7 +53,6 @@ class IntradayBacktest:
     PREFIX = {'nifty': 'Nifty', 'banknifty': 'BN', 'finnifty': 'FN', 'midcpnifty': 'MCN', 'sensex': 'SX','bankex': 'BX'}
     SLIPAGES = {'nifty': 0.01, 'banknifty': 0.0125, 'finnifty': 0.01, 'midcpnifty': 0.0125, 'sensex': 0.0125, 'bankex': 0.0125}
     STEPS = {'nifty': 1000, 'banknifty': 5000, 'finnifty': 1000, 'midcpnifty': 1000, 'sensex': 5000,'bankex': 5000, 'spxw': 500, 'xsp': 50}
-    STEPS.update({'spxw_mon': 500, 'spx_tue': 500, 'spx_wed': 500, 'spx_thu': 500, 'spx_fri': 500, 'xsp_mon': 50, 'xsp_tue': 50, 'xsp_wed': 50, 'xsp_thu': 50, 'xsp_fri': 50})
     STEPS.update({'crudeoil':500, 'crudeoilm':500, 'natgasmini':50, 'naturalgas':50})
 
     token, group_id = '5156026417:AAExQbrMAPrV0qI8tSYplFDjZltLBzXTm1w', '-607631145'
@@ -106,6 +105,16 @@ class IntradayBacktest:
             return min_gap
         except Exception as e:
             print(e)
+
+    def get_one_om(self, future_price=None):
+
+        future_price = self.future_data['close'].iloc[0] if future_price is None else future_price
+
+        if self.index.lower() in self.STEPS:
+            step = self.STEPS[self.index.lower()]
+            return ((int(future_price/step)*step)/100)
+        else:
+            return cal_percent(round(future_price), 1)
 
     def _get_single_leg_data(self, start_dt, end_dt, scrip):
         data = self.options[(self.options.scrip == scrip) & (self.options['date_time'] >= start_dt) & (self.options['date_time'] <= end_dt)].copy()
@@ -200,8 +209,8 @@ class IntradayBacktest:
         for current_dt in valid_times:
             try:
                 future_price = self.future_data.loc[current_dt,'close']
-                step = self.STEPS[self.index.lower()]
-                target = ((int(future_price/step)*step)/100*om) if target is None else target
+                one_om = self.get_one_om(future_price)
+                target = one_om * om if target is None else target
                 target_od = self.options[(self.options['date_time'] == current_dt) & (self.options['close'] >= target * tf)].sort_values(by=['close']).copy()
                 
                 ce_scrip = target_od.loc[target_od['scrip'].str.endswith('CE'), 'scrip'].iloc[0]
@@ -260,8 +269,8 @@ class IntradayBacktest:
         for current_dt in valid_times:
             try:
                 future_price = self.future_data.loc[current_dt,'close']
-                step = self.STEPS[self.index.lower()]
-                target = ((int(future_price/step)*step)/100*om) if target is None else target
+                one_om = self.get_one_om(future_price)
+                target = one_om * om if target is None else target
                 target_od = self.options[(self.options['date_time'] == current_dt) & (self.options['close'] >= target)].sort_values(by=['close']).copy()
                 
                 ce_scrip = target_od.loc[target_od['scrip'].str.endswith('CE'), 'scrip'].iloc[0]
@@ -286,8 +295,7 @@ class IntradayBacktest:
             if '%' in str(om):
                 om_precent = float(om.replace('%', ''))
                 future_price = self.future_data['close'].iloc[0]
-                step = self.STEPS[self.index.lower()]
-                one_om =  ((int(future_price/step)*step)/100)
+                one_om = self.get_one_om(future_price)
                 target = one_om*om_precent/100
 
             ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_ut_strike(start_dt, end_dt, om=om, target=target)  
@@ -1084,8 +1092,8 @@ class WeeklyBacktest(IntradayBacktest):
         for current_dt in valid_times:
             try:
                 future_price = self.future_data.loc[current_dt,'close']
-                step = self.STEPS[self.index.lower()]
-                target = ((int(future_price/step)*step)/100*om) if target is None else target
+                one_om = self.get_one_om(future_price)
+                target = one_om * om if target is None else target
                 target_od = self.options[(self.options['date_time'] == current_dt) & (self.options['close'] >= target * tf)].sort_values(by=['close']).copy()
                 
                 ce_scrip = target_od.loc[target_od['scrip'].str.endswith('CE'), 'scrip'].iloc[0]
@@ -1145,8 +1153,8 @@ class WeeklyBacktest(IntradayBacktest):
         for current_dt in valid_times:
             try:
                 future_price = self.future_data.loc[current_dt,'close']
-                step = self.STEPS[self.index.lower()]
-                target = ((int(future_price/step)*step)/100*om) if target is None else target
+                one_om = self.get_one_om(future_price)
+                target = one_om * om if target is None else target
                 target_od = self.options[(self.options['date_time'] == current_dt) & (self.options['close'] >= target)].sort_values(by=['close']).copy()
                 
                 ce_scrip = target_od.loc[target_od['scrip'].str.endswith('CE'), 'scrip'].iloc[0]
@@ -1169,8 +1177,7 @@ class WeeklyBacktest(IntradayBacktest):
             if '%' in str(om):
                 om_precent = float(om.replace('%', ''))
                 future_price = self.future_data['close'].iloc[0]
-                step = self.STEPS[self.index.lower()]
-                one_om =  ((int(future_price/step)*step)/100)
+                one_om = self.get_one_om(future_price)
                 target = one_om*om_precent/100
 
             ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_ut_strike(start_dt, end_dt, om=om, target=target)  

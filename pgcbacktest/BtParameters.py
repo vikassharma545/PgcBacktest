@@ -138,7 +138,7 @@ def get_parameter_data(code, parameter_path):
         if code == 'B120_SI':
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
  
-    if (code == 'B120_RE_UT'):
+    if (code == 'B120_RE_UT') or (code == "B120_UT_TRAIL"):
     
         parameter.loc[parameter['sl'] == 0, 'ut_sl'] = 0
         parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'

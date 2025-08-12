@@ -11,15 +11,9 @@ setup(
     license="MIT",
     packages=find_packages(),
     install_requires=[
-        "pandas==2.3.1",
-        "polars==1.27.1",
-        "plotly==6.2.0",
-        "numpy==2.2.6",
-        "dask==2025.7.0",
-        "numba==0.61.2",
-        "streamlit==1.44.1",
+        "pandas>=2.0.0",
+        "numpy>=1.20.0",
         "requests",
-        "tqdm",
     ],
     python_requires=">=3.10",
     classifiers=[

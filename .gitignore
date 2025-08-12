@@ -3,3 +3,4 @@
 **/__pycache__
 **/*_DashBoard*
 pgc_backtest.egg-info
+test_basic.py

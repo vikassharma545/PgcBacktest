@@ -1,14 +1,10 @@
 import os
-import gc
 import datetime
 import requests
-import traceback
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
-from time import sleep
-import concurrent.futures
 from functools import lru_cache
+# Note: Using future.no_silent_downcasting is deprecated in newer pandas versions
 pd.set_option('future.no_silent_downcasting', True)
 
 class DataEmptyError(Exception):
@@ -23,7 +19,12 @@ def set_pm_time_index(data, time_index):
         return pd.Series(0, index=time_index)
     return data.reindex(index=time_index, method='ffill', fill_value=0, copy=True)
 
-cv = lambda x: str(float(x)) if isinstance(x, (int, float)) or (isinstance(x, str) and x.replace('.', '', 1).isdigit()) else x
+
+def cv(x):
+    """Convert value to string representation of float if numeric, otherwise return as-is."""
+    if isinstance(x, (int, float)) or (isinstance(x, str) and x.replace('.', '', 1).isdigit()):
+        return str(float(x))
+    return x
 
 def cal_percent(price, percent):
     return price * percent/100
@@ -91,8 +92,8 @@ class IntradayBacktest:
     def send_tg_msg(self, msg):
         print(msg)
         try:
-            requests.get(f'https://api.telegram.org/bot{self.token}/sendMessage?chat_id={self.group_id}&text={msg}')
-        except:
+            requests.get(f'https://api.telegram.org/bot{self.token}/sendMessage?chat_id={self.group_id}&text={msg}', timeout=10)
+        except (requests.RequestException, requests.Timeout):
             pass
 
     def get_gap(self):

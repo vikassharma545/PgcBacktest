@@ -1,8 +1,5 @@
-import datetime
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
 
 
 def moving_cross_over(data, short_type, short_period, long_type, long_period):
@@ -10,7 +7,8 @@ def moving_cross_over(data, short_type, short_period, long_type, long_period):
     data = data.copy()
     short_period, long_period = int(short_period), int(long_period)
 
-    if short_period > long_period: raise Exception("Sort Period > Long Period")
+    if short_period > long_period:
+        raise Exception("Sort Period > Long Period")
     
     if short_type == "NORMAL":
         data['short'] = data['close'].rolling(window=short_period).mean()
@@ -26,41 +24,11 @@ def moving_cross_over(data, short_type, short_period, long_type, long_period):
     data['signal'] = 0
     data['signal'] = (data['short'] > data['long'])*1.0
     data['positions'] = data['signal'].diff()
-    data['BUY'] = data['positions'].replace({-1:'PE', 1:'CE', 0: ''})
-    data['SELL'] = data['positions'].replace({-1:'CE', 1:'PE', 0: ''})
+    data['BUY'] = data['positions'].replace({-1: 'PE', 1: 'CE', 0: ''})
+    data['SELL'] = data['positions'].replace({-1: 'CE', 1: 'PE', 0: ''})
     return data
 
 
-def plot_moving_crossover_signals(data, title="Moving Average Crossover Signals"):
-    
-    data = data.copy()
-    plt.figure(figsize=(14, 7))
-
-    # Plot close price and moving averages
-    plt.plot(data['datetime'], data['close'], label='Close Price', color='gray', alpha=0.5)
-    plt.plot(data['datetime'], data['short'], label='Short MA', color='blue')
-    plt.plot(data['datetime'], data['long'], label='Long MA', color='red')
-
-    # Identify crossover points
-    cross_points = data[data['positions'].isin([1.0, -1.0])]
-
-    # Draw vertical lines and print time on x-axis
-    for _, row in cross_points.iterrows():
-        plt.axvline(x=row['datetime'], color='black', linestyle='--', alpha=0.3)
-        plt.text(row['datetime'], data['close'].min(), row['datetime'].strftime('%H:%M'),
-                rotation=90, fontsize=8, va='bottom', ha='center', color='black')
-
-    # Basic chart settings
-    plt.title(title)
-    plt.xlabel('Datetime')
-    plt.ylabel('Price')
-    plt.xticks(rotation=45)
-    plt.legend(loc='best')
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
-    
-    
 def ATR(df, period=10):
     
     df = df.copy()
@@ -129,48 +97,6 @@ def supertrend(df, period=10, multiplier=3):
     return df
 
 
-def plot_supertrend_signals(data, title="SuperTrend Signals"):
-    
-    data = data.copy()
-    plt.figure(figsize=(14, 7))
-
-    # Plot close price
-    plt.plot(data['datetime'], data['close'], label='Close Price', color='gray', alpha=0.5)
-
-    # Color-coded SuperTrend line
-    for i in range(1, len(data)):
-        if not np.isnan(data['supertrend'].iloc[i - 1]) and not np.isnan(data['supertrend'].iloc[i]):
-            color = 'green' if data['supertrend_direction'].iloc[i] else 'red'
-            plt.plot(data['datetime'].iloc[i - 1:i + 1],
-                     data['supertrend'].iloc[i - 1:i + 1],
-                     color=color, linewidth=2)
-
-    # Signal timestamps (optional)
-    cross_points = data[data['positions'].isin([1.0, -1.0])]
-    for _, row in cross_points.iterrows():
-        color = 'green' if row['positions'] == 1.0 else 'red'
-        plt.axvline(x=row['datetime'], color=color, linestyle='--', alpha=0.3)
-        plt.text(row['datetime'], data['close'].min(), row['datetime'].strftime('%H:%M'),
-                 rotation=90, fontsize=8, va='bottom', ha='center', color=color)
-
-    # Custom legend
-    custom_lines = [
-        Line2D([0], [0], color='gray', lw=2, label='Close Price'),
-        Line2D([0], [0], color='green', lw=2, label='SuperTrend (Uptrend)'),
-        Line2D([0], [0], color='red', lw=2, label='SuperTrend (Downtrend)')
-    ]
-    plt.legend(handles=custom_lines, loc='best')
-
-    # Chart settings
-    plt.title(title)
-    plt.xlabel('Datetime')
-    plt.ylabel('Price')
-    plt.xticks(rotation=45)
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
-
-
 def rsi(df, period=14, upper=70, lower=30):
     
     df = df.copy()
@@ -209,46 +135,7 @@ def rsi(df, period=14, upper=70, lower=30):
 
     return df
 
-def plot_rsi_signals(df, title="RSI (Relative Strength Index)"):
-    
-    df = df.copy()
-    upper = df['rsi_upper'].iloc[-1] if 'rsi_upper' in df else 70
-    lower = df['rsi_lower'].iloc[-1] if 'rsi_lower' in df else 30
 
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 8), sharex=True, gridspec_kw={'height_ratios': [2, 1]})
-
-    # Plot close price in top chart
-    ax1.plot(df['datetime'], df['close'], label='Close Price', color='black', linewidth=1)
-    ax1.set_title("Close Price")
-    ax1.set_ylabel("Price")
-    ax1.grid(True)
-    ax1.legend(loc='upper left')
-
-    # Draw vertical lines and time labels only on close price chart
-    if 'positions' in df.columns:
-        cross_points = df[df['positions'].isin([1.0, -1.0])]
-        for _, row in cross_points.iterrows():
-            ax1.axvline(x=row['datetime'], color='black', linestyle='--', alpha=0.3)
-            ax1.text(row['datetime'], df['close'].min(), row['datetime'].strftime('%H:%M'),
-                     rotation=90, fontsize=8, va='bottom', ha='center', color='black')
-
-    # Plot RSI in bottom chart
-    ax2.plot(df['datetime'], df['rsi'], label='RSI', color='blue', linewidth=1.5)
-    ax2.axhline(upper, color='red', linestyle='--', linewidth=1, label=f'Overbought ({upper})')
-    ax2.axhline(lower, color='green', linestyle='--', linewidth=1, label=f'Oversold ({lower})')
-    ax2.axhline(50, color='gray', linestyle='--', linewidth=0.8, alpha=0.5)
-
-    ax2.set_title(title)
-    ax2.set_xlabel("Datetime")
-    ax2.set_ylabel("RSI")
-    ax2.set_ylim(0, 100)
-    ax2.grid(True)
-    ax2.legend(loc='upper left')
-
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    plt.show()
-    
 def macd(df, fast=12, slow=26, signal=9):
     
     df = df.copy()
@@ -290,41 +177,4 @@ def macd(df, fast=12, slow=26, signal=9):
     df['SELL'] = df['positions'].replace({1.0: '', -1.0: 'PE', 0.0: ''})
 
     return df
-
-def plot_macd(df, title="MACD (Moving Average Convergence Divergence)"):
-    
-    df = df.copy()
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 8), sharex=True, gridspec_kw={'height_ratios': [2, 1]})
-
-    # Top Panel: Close Price
-    ax1.plot(df['datetime'], df['close'], label='Close Price', color='black', linewidth=1)
-    ax1.set_title("Close Price")
-    ax1.set_ylabel("Price")
-    ax1.grid(True)
-    ax1.legend(loc='upper left')
-
-    # Draw vertical lines and time labels only on top chart
-    if 'positions' in df.columns:
-        cross_points = df[df['positions'].isin([1.0, -1.0])]
-        for _, row in cross_points.iterrows():
-            ax1.axvline(x=row['datetime'], color='black', linestyle='--', alpha=0.3)
-            ax1.text(row['datetime'], df['close'].min(), row['datetime'].strftime('%H:%M'),
-                     rotation=90, fontsize=8, va='bottom', ha='center', color='black')
-
-    # Bottom Panel: MACD Plot
-    ax2.plot(df['datetime'], df['macd'], label='MACD Line', color='blue', linewidth=1.5)
-    ax2.plot(df['datetime'], df['macd_signal'], label='Signal Line', color='orange', linewidth=1.5)
-
-    # Histogram bars
-    ax2.bar(df['datetime'], df['macd_hist'], label='Histogram', color='gray', alpha=0.5, width=0.0005)
-
-    ax2.set_title(title)
-    ax2.set_xlabel("Datetime")
-    ax2.set_ylabel("MACD")
-    ax2.grid(True)
-    ax2.legend(loc='upper left')
-
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    plt.show()
 

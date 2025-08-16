@@ -506,8 +506,8 @@ if __name__ == "__main__":
         print(f"\nRunning Processes: {len(processes)}")
         print(f"Allowed Processes: {no_of_terminal_allowed}\n")
 
-        if len(processes) <= int(no_of_terminal_allowed*0.7) and no_of_terminal_allowed != -1:
-            
+        if len(processes) <= int(no_of_terminal_allowed*0.7) and (len(processes) == 0 or no_of_terminal_allowed != -1):
+
             print(f"\nNumber of Terminal Running - {len(processes)} << {no_of_terminal_allowed}")
             
             for idx, proc in processes:
@@ -525,7 +525,7 @@ if __name__ == "__main__":
 
             ### Run the converted script
             print('\nCode is About to Restart in ...')
-            fun_timer(30)
+            fun_timer(len(processes)*2)
             print('\nRunning Code...\n')
             processes = []
             df = pd.read_csv(temp_meta_data_path)

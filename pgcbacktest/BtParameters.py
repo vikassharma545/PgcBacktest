@@ -319,6 +319,12 @@ def get_parameter_data(code, parameter_path):
         
         parameter['orderside'] = parameter['orderside'].str.upper()
         parameter['method'] = parameter['method'].str.upper()
+        
+    elif (code == 'FUTURE_RANGE_BREAKOUT'):
+        
+        parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
+                
+        parameter['method'] = parameter['method'].str.upper()
 
     elif (code == 'DT_PSL') or (code == 'DT_SI_PSL') or (code == 'DT_RE_PSL'):
         parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]

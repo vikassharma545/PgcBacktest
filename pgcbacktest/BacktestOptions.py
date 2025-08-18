@@ -626,6 +626,46 @@ class IntradayBacktest:
                 return (exit_time, per_minute_mtm_series)
             else:
                 return (sl_price, intra_sl_price, sl_flag, intra_sl_flag, target_flag, exit_time, pnl)
+            
+    def decay_check_by_given_data(self, scrip_df, decay=None, decay_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False):
+        
+        decay_flag, decay_time = False, ''
+        
+        try:
+            if scrip_df.empty: raise DataEmptyError
+
+            o = scrip_df['close'].iloc[0]
+
+            if from_next_minute: scrip_df = scrip_df.iloc[1:]
+            if scrip_df.empty: raise DataEmptyError
+                
+            h, l, c = scrip_df['high'].max(), scrip_df['low'].min(), scrip_df['close'].iloc[-1]
+
+            if orderside == 'SELL':
+                decay_price = ((100 - decay)/100) * o if decay_price is None else decay_price
+                mask_decay = (scrip_df['close'] if from_candle_close else scrip_df['low']) <= decay_price
+
+            elif orderside == 'BUY':
+                decay_price = ((100 + decay)/100) * o if decay_price is None else decay_price
+                mask_decay = (scrip_df['close'] if from_candle_close else scrip_df['high']) >= decay_price
+
+            if mask_decay.any():
+                decay_flag = True
+                decay_time = scrip_df.loc[mask_decay.idxmax(), 'date_time']
+
+        except DataEmptyError:
+            decay_flag, decay_time = False, ''
+            o, h, l, c = '', '', '', ''
+        except Exception as e:
+            print('decay_check_single_leg', e)
+            traceback.print_exc()
+            decay_flag, decay_time = False, ''
+            o, h, l, c = '', '', '', ''
+
+        if with_ohlc:
+            return o, h, l, c, decay_price, decay_flag, decay_time
+        else:
+            return decay_price, decay_flag, decay_time
 
     def _decay_check_single_leg(self, start_dt, end_dt, scrip, decay=None, decay_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False):
         

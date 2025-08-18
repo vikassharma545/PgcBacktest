@@ -115,7 +115,7 @@ def get_parameter_data(code, parameter_path):
     
     parameter = pd.read_csv(parameter_path)
     for col in parameter.columns:
-        if 'time' in col:
+        if ('time' in col) and ('and' not in col):
             globals()[f'{col}'] = pd.to_datetime(parameter[col].dropna().str.replace(' ', '').str[0:5], format='%H:%M').dt.time.to_list()
         else:
             globals()[f'{col}'] = parameter[col].dropna().to_list()
@@ -125,6 +125,9 @@ def get_parameter_data(code, parameter_path):
     # filter - entry < (exit_time - 5min)
     parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
 
+    if code.endswith('_PSL') and "last_trade_time_and_interval" in parameter.columns:
+        parameter[['last_trade_time', 'trade_interval']] = parameter['last_trade_time_and_interval'].str.strip().str.split(',', expand=True)
+        parameter['last_trade_time'] = pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time
 
     if (code == 'B120') or (code == 'B120_TTC_RE') or (code == 'B120W') or (code == 'B120M') or (code == 'B120_SI'):
     

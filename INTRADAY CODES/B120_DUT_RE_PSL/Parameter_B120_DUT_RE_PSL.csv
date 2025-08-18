@@ -1,8 +1,3 @@
-entry_time,exit_time,last_trade_time,trade_interval,orderside,method,sl,ut_sl,om,re_entries
-09:20:00,15:25:00,10:00:00,10min,sell,HL,20,50,0,0
-,,,,,,,,,
-,,,,,,,,,
-,,,,,,,,,
-,,,,,,,,,
-,,,,,,,,,
-,,,,,,,,,
+entry_time,exit_time,last_trade_time_and_interval,orderside,method,sl,ut_sl,om,re_entries
+09:20:00,15:25:00,"10:00:00, 10MIN",sell,HL,20,50,0,0
+,,"13:00:00, 15MIN",,,,,,

@@ -1,0 +1,2 @@
+entry_time,exit_time,orderside,method,minute_check,sl,om
+09:20,15:25,SELL,HL,15,30,0

@@ -35,12 +35,13 @@ def get_strike(scrip):
 
 chunk_size = 100_000
 def is_file_exists(output_csv_path, file_name, parameter_size, dir_files=None):
+    
+    total_chunks = (parameter_size - 1) // chunk_size + 1
 
     if dir_files is None:
-        dir_files = set(os.listdir(output_csv_path))
-        
-    total_chunks = (parameter_size - 1) // chunk_size + 1
-    return all(f"{file_name} No-{idx}.parquet" in dir_files for idx in range(1, total_chunks + 1))
+        return all(os.path.exists(f"{output_csv_path}{file_name} No-{idx}.parquet") for idx in range(1, total_chunks + 1))
+    else:
+        return all(f"{file_name} No-{idx}.parquet" in dir_files for idx in range(1, total_chunks + 1))
 
 def save_chunk_data(chunk, log_cols, chunck_file_name):
     chunk = [d for d in chunk if d is not None]

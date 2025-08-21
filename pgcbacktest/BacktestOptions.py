@@ -1,5 +1,6 @@
 import os
 import gc
+import math
 import datetime
 import requests
 import traceback
@@ -10,6 +11,11 @@ from time import sleep
 import concurrent.futures
 from functools import lru_cache
 pd.set_option('future.no_silent_downcasting', True)
+
+NSE_INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY']
+BSE_INDICES = ['BANKEX', 'SENSEX']
+MCX_INDICES = ['CRUDEOIL', 'CRUDEOILM', 'NATGASMINI', 'NATURALGAS']
+US_INDICES = ['AAPL', 'AMD', 'AMZN', 'BABA', 'GOOGL', 'HOOD', 'INTC', 'MARA', 'META', 'MSFT', 'MSTR', 'NVDA', 'PLTR', 'QQQ_FRI', 'QQQ_MON', 'QQQ_THU', 'QQQ_TUE', 'QQQ_WED', 'SMCI', 'SOFI', 'SPXW_FRI', 'SPXW_MON', 'SPXW_THU', 'SPXW_TUE', 'SPXW_WED', 'SPY_FRI', 'SPY_MON', 'SPY_THU', 'SPY_TUE', 'SPY_WED', 'TSLA', 'UVIX', 'UVXY', 'VIX', 'VXX', 'XSP_FRI', 'XSP_MON', 'XSP_THU', 'XSP_TUE', 'XSP_WED']
 
 class DataEmptyError(Exception):
     pass
@@ -55,6 +61,16 @@ class IntradayBacktest:
     SLIPAGES = {'nifty': 0.01, 'banknifty': 0.0125, 'finnifty': 0.01, 'midcpnifty': 0.0125, 'sensex': 0.0125, 'bankex': 0.0125}
     STEPS = {'nifty': 1000, 'banknifty': 5000, 'finnifty': 1000, 'midcpnifty': 1000, 'sensex': 5000,'bankex': 5000, 'spxw': 500, 'xsp': 50}
     STEPS.update({'crudeoil':500, 'crudeoilm':500, 'natgasmini':50, 'naturalgas':50})
+    TICKS = {'crudeoil':0.10} # Except all 0.05
+    
+    ROUNDING_MAP = {
+        ('SELL', 'STOPLOSS'): math.ceil,
+        ('SELL', 'TARGET'): math.floor,
+        ('SELL', 'DECAY'): math.floor,
+        ('BUY', 'STOPLOSS'): math.floor,
+        ('BUY', 'TARGET'): math.ceil,
+        ('BUY', 'DECAY'): math.ceil,
+    }
 
     token, group_id = '5156026417:AAExQbrMAPrV0qI8tSYplFDjZltLBzXTm1w', '-607631145'
 
@@ -69,7 +85,17 @@ class IntradayBacktest:
         self.options = self.options[(self.options['date_time'].dt.time >= self.meta_start_time) & (self.options['date_time'].dt.time <= self.meta_end_time)]
         self.options_data = self.options.set_index(['date_time', 'scrip'])
         self.gap = self.get_gap()
+        self.tick_size = self.TICKS.get(self.index.lower(), 0.05)
         
+        if self.index in NSE_INDICES:
+            self.market = 'NSE'
+        elif self.index in BSE_INDICES:
+            self.market = 'BSE'
+        elif self.index in MCX_INDICES:
+            self.market = 'MCX'
+        elif self.index in US_INDICES:
+            self.market = 'US'
+
         self.get_single_leg_data = lru_cache(maxsize=4096)(self._get_single_leg_data)
         self.get_straddle_data = lru_cache(maxsize=4096)(self._get_straddle_data)
         self.get_strike = lru_cache(maxsize=4096)(self._get_strike)
@@ -116,6 +142,10 @@ class IntradayBacktest:
             return ((int(future_price/step)*step)/100)
         else:
             return cal_percent(round(future_price), 1)
+
+    def round_to_ticksize(self, value, orderside, ordertype): 
+        round_func = self.ROUNDING_MAP[(orderside, ordertype)]
+        return round(round_func(value / self.tick_size) * self.tick_size, 2)
 
     def _get_single_leg_data(self, start_dt, end_dt, scrip):
         data = self.options[(self.options.scrip == scrip) & (self.options['date_time'] >= start_dt) & (self.options['date_time'] <= end_dt)].copy()
@@ -321,7 +351,7 @@ class IntradayBacktest:
             elif only == "PE":
                 return pe_scrip, pe_price, future_price, start_dt
             
-    def sl_check_by_given_data(self, scrip_df, o=None, sl=0, intra_sl=0, sl_price=None, target_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False):
+    def sl_check_by_given_data(self, scrip_df, o=None, sl=0, intra_sl=0, sl_price=None, target_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False, roundtick=False):
         sl_flag, intra_sl_flag, target_flag, exit_time, pnl = False, False, False, '', 0
 
         try:
@@ -340,6 +370,11 @@ class IntradayBacktest:
                 intra_sl_price = ((100 + intra_sl) / 100) * o if intra_sl else (h + 1)
                 target_price = target_price if target_price is not None else (l - 1)
 
+                if roundtick or self.market == 'MCX':
+                    sl_price_val = self.round_to_ticksize(sl_price_val, orderside, 'STOPLOSS')
+                    intra_sl_price = self.round_to_ticksize(intra_sl_price, orderside, 'STOPLOSS')
+                    target_price = self.round_to_ticksize(target_price, orderside, 'TARGET')
+
                 mask_intra_sl = scrip_df['high'] >= intra_sl_price
                 mask_sl = (scrip_df['close'] if from_candle_close else scrip_df['high']) >= sl_price_val
                 mask_target = scrip_df['low'] <= target_price
@@ -348,6 +383,11 @@ class IntradayBacktest:
                 sl_price_val = (((100 - sl) / 100) * o if sl_price is None else sl_price) if (sl or sl_price) else (l - 1)
                 intra_sl_price = ((100 - intra_sl) / 100) * o if intra_sl else (l - 1)
                 target_price = target_price if target_price is not None else (h + 1)
+                
+                if roundtick or self.market == 'MCX':
+                    sl_price_val = self.round_to_ticksize(sl_price_val, orderside, 'STOPLOSS')
+                    intra_sl_price = self.round_to_ticksize(intra_sl_price, orderside, 'STOPLOSS')
+                    target_price = self.round_to_ticksize(target_price, orderside, 'TARGET')
 
                 mask_intra_sl = scrip_df['low'] <= intra_sl_price
                 mask_sl = (scrip_df['close'] if from_candle_close else scrip_df['low']) <= sl_price_val
@@ -422,7 +462,7 @@ class IntradayBacktest:
             else:
                 return (sl_price, sl_flag, intra_sl_flag, target_flag, exit_time, pnl)
 
-    def _sl_check_single_leg(self, start_dt, end_dt, scrip, o=None, sl=0, intra_sl=0, sl_price=None, target_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False):
+    def _sl_check_single_leg(self, start_dt, end_dt, scrip, o=None, sl=0, intra_sl=0, sl_price=None, target_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False, roundtick=False):
         sl_flag, intra_sl_flag, target_flag, exit_time, pnl = False, False, False, '', 0
 
         try:
@@ -441,6 +481,11 @@ class IntradayBacktest:
                 sl_price_val = (((100 + sl) / 100) * o if sl_price is None else sl_price) if (sl or sl_price) else (h + 1)
                 intra_sl_price = ((100 + intra_sl) / 100) * o if intra_sl else (h + 1)
                 target_price = target_price if target_price is not None else (l - 1)
+                
+                if roundtick or self.market == 'MCX':
+                    sl_price_val = self.round_to_ticksize(sl_price_val, orderside, 'STOPLOSS')
+                    intra_sl_price = self.round_to_ticksize(intra_sl_price, orderside, 'STOPLOSS')
+                    target_price = self.round_to_ticksize(target_price, orderside, 'TARGET')
 
                 mask_intra_sl = scrip_df['high'] >= intra_sl_price
                 mask_sl = (scrip_df['close'] if from_candle_close else scrip_df['high']) >= sl_price_val
@@ -450,6 +495,11 @@ class IntradayBacktest:
                 sl_price_val = (((100 - sl) / 100) * o if sl_price is None else sl_price) if (sl or sl_price) else (l - 1)
                 intra_sl_price = ((100 - intra_sl) / 100) * o if intra_sl else (l - 1)
                 target_price = target_price if target_price is not None else (h + 1)
+                
+                if roundtick or self.market == 'MCX':
+                    sl_price_val = self.round_to_ticksize(sl_price_val, orderside, 'STOPLOSS')
+                    intra_sl_price = self.round_to_ticksize(intra_sl_price, orderside, 'STOPLOSS')
+                    target_price = self.round_to_ticksize(target_price, orderside, 'TARGET')
 
                 mask_intra_sl = scrip_df['low'] <= intra_sl_price
                 mask_sl = (scrip_df['close'] if from_candle_close else scrip_df['low']) <= sl_price_val
@@ -524,7 +574,7 @@ class IntradayBacktest:
             else:
                 return (sl_price, sl_flag, intra_sl_flag, target_flag, exit_time, pnl)
 
-    def _sl_check_combine_leg(self, start_dt, end_dt, ce_scrip, pe_scrip, o=None, sl=0, intra_sl=0, sl_price=None, intra_sl_price=None, target_price=None, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False):
+    def _sl_check_combine_leg(self, start_dt, end_dt, ce_scrip, pe_scrip, o=None, sl=0, intra_sl=0, sl_price=None, intra_sl_price=None, target_price=None, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False, roundtick=False):
         sl_flag, intra_sl_flag, target_flag, exit_time, pnl = False, False, False, '', 0
 
         try:
@@ -543,6 +593,11 @@ class IntradayBacktest:
                 sl_price_val = (((100 + sl) / 100) * o if sl_price is None else sl_price) if (sl or sl_price) else (ch + 1)
                 intra_sl_price_val = (((100 + intra_sl) / 100) * o if intra_sl_price is None else intra_sl_price) if (intra_sl or intra_sl_price) else (h + 1)
                 target_price = target_price if target_price is not None else (cl - 1)
+                
+                if roundtick or self.market == 'MCX':
+                    sl_price_val = self.round_to_ticksize(sl_price_val, orderside, 'STOPLOSS')
+                    intra_sl_price_val = self.round_to_ticksize(intra_sl_price_val, orderside, 'STOPLOSS')
+                    target_price = self.round_to_ticksize(target_price, orderside, 'TARGET')
 
                 mask_intra_sl = scrip_df['high'] >= intra_sl_price_val
                 mask_sl = scrip_df['close'] >= sl_price_val
@@ -552,6 +607,11 @@ class IntradayBacktest:
                 sl_price_val = (((100 - sl) / 100) * o if sl_price is None else sl_price) if (sl or sl_price) else (cl - 1)
                 intra_sl_price_val = (((100 - intra_sl) / 100) * o if intra_sl_price is None else intra_sl_price) if (intra_sl or intra_sl_price) else (l - 1)
                 target_price = target_price if target_price is not None else (ch + 1)
+                
+                if roundtick or self.market == 'MCX':
+                    sl_price_val = self.round_to_ticksize(sl_price_val, orderside, 'STOPLOSS')
+                    intra_sl_price_val = self.round_to_ticksize(intra_sl_price_val, orderside, 'STOPLOSS')
+                    target_price = self.round_to_ticksize(target_price, orderside, 'TARGET')
 
                 mask_intra_sl = scrip_df['low'] <= intra_sl_price_val
                 mask_sl = scrip_df['close'] <= sl_price_val
@@ -627,7 +687,7 @@ class IntradayBacktest:
             else:
                 return (sl_price, intra_sl_price, sl_flag, intra_sl_flag, target_flag, exit_time, pnl)
             
-    def decay_check_by_given_data(self, scrip_df, decay=None, decay_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False):
+    def decay_check_by_given_data(self, scrip_df, decay=None, decay_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False, roundtick=False):
         
         decay_flag, decay_time = False, ''
         
@@ -643,10 +703,18 @@ class IntradayBacktest:
 
             if orderside == 'SELL':
                 decay_price = ((100 - decay)/100) * o if decay_price is None else decay_price
+                
+                if roundtick or self.market == 'MCX':
+                    decay_price = self.round_to_ticksize(decay_price, orderside, 'DECAY')
+
                 mask_decay = (scrip_df['close'] if from_candle_close else scrip_df['low']) <= decay_price
 
             elif orderside == 'BUY':
                 decay_price = ((100 + decay)/100) * o if decay_price is None else decay_price
+                
+                if roundtick or self.market == 'MCX':
+                    decay_price = self.round_to_ticksize(decay_price, orderside, 'DECAY')
+
                 mask_decay = (scrip_df['close'] if from_candle_close else scrip_df['high']) >= decay_price
 
             if mask_decay.any():
@@ -667,7 +735,7 @@ class IntradayBacktest:
         else:
             return decay_price, decay_flag, decay_time
 
-    def _decay_check_single_leg(self, start_dt, end_dt, scrip, decay=None, decay_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False):
+    def _decay_check_single_leg(self, start_dt, end_dt, scrip, decay=None, decay_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False, roundtick=False):
         
         decay_flag, decay_time = False, ''
         
@@ -684,10 +752,18 @@ class IntradayBacktest:
 
             if orderside == 'SELL':
                 decay_price = ((100 - decay)/100) * o if decay_price is None else decay_price
+                
+                if roundtick or self.market == 'MCX':
+                    decay_price = self.round_to_ticksize(decay_price, orderside, 'DECAY')
+
                 mask_decay = (scrip_df['close'] if from_candle_close else scrip_df['low']) <= decay_price
 
             elif orderside == 'BUY':
                 decay_price = ((100 + decay)/100) * o if decay_price is None else decay_price
+                
+                if roundtick or self.market == 'MCX':
+                    decay_price = self.round_to_ticksize(decay_price, orderside, 'DECAY')
+
                 mask_decay = (scrip_df['close'] if from_candle_close else scrip_df['high']) >= decay_price
 
             if mask_decay.any():
@@ -708,7 +784,7 @@ class IntradayBacktest:
         else:
             return decay_price, decay_flag, decay_time
         
-    def _sl_check_single_leg_with_sl_trail(self, start_dt, end_dt, scrip, trail, sl_trail, o=None, sl=0, sl_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False):
+    def _sl_check_single_leg_with_sl_trail(self, start_dt, end_dt, scrip, trail, sl_trail, o=None, sl=0, sl_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False, roundtick=False):
         sl_flag, trail_flag, exit_time, pnl = False, False, '', 0
 
         try:
@@ -728,15 +804,23 @@ class IntradayBacktest:
 
             if orderside == 'SELL':
                 sl_price = ((100 + sl) / 100) * o if sl_price is None else sl_price
-                
                 trail_price = o - trail_limit
+                
+                if roundtick or self.market == 'MCX':
+                    sl_price = self.round_to_ticksize(sl_price, orderside, 'STOPLOSS')
+                    trail_price = self.round_to_ticksize(trail_price, orderside, 'TARGET')
+
                 mask_sl = (scrip_df['close'] if from_candle_close else scrip_df['high']) >= sl_price
                 mask_trail = (scrip_df['close'] if from_candle_close else scrip_df['low']) <= trail_price
 
             elif orderside == 'BUY':
                 sl_price = ((100 - sl) / 100) * o if sl_price is None else sl_price
-
                 trail_price = o + trail_limit            
+                
+                if roundtick or self.market == 'MCX':
+                    sl_price = self.round_to_ticksize(sl_price, orderside, 'STOPLOSS')
+                    trail_price = self.round_to_ticksize(trail_price, orderside, 'TARGET')
+
                 mask_sl = (scrip_df['close'] if from_candle_close else scrip_df['low']) <= sl_price
                 mask_trail = (scrip_df['close'] if from_candle_close else scrip_df['high']) >= trail_price
 
@@ -761,12 +845,20 @@ class IntradayBacktest:
                     if orderside == 'SELL':
                         sl_price = sl_price - sl_trail_limit
                         trail_price = trail_price - trail_limit
+                        
+                        if roundtick or self.market == 'MCX':
+                            sl_price = self.round_to_ticksize(sl_price, orderside, 'STOPLOSS')
+                            trail_price = self.round_to_ticksize(trail_price, orderside, 'TARGET')
 
                         mask_sl = (scrip_df['close'] if from_candle_close else scrip_df['high']) >= sl_price
                         mask_trail = (scrip_df['close'] if from_candle_close else scrip_df['low']) <= trail_price
                     elif orderside == 'BUY':
                         sl_price = sl_price + sl_trail_limit
                         trail_price = trail_price + trail_limit
+                        
+                        if roundtick or self.market == 'MCX':
+                            sl_price = self.round_to_ticksize(sl_price, orderside, 'STOPLOSS')
+                            trail_price = self.round_to_ticksize(trail_price, orderside, 'TARGET')
 
                         mask_sl = (scrip_df['close'] if from_candle_close else scrip_df['low']) <= sl_price
                         mask_trail = (scrip_df['close'] if from_candle_close else scrip_df['high']) >= trail_price
@@ -815,7 +907,7 @@ class IntradayBacktest:
             else:
                 return (sl_price, sl_flag, trail_flag, exit_time, pnl)
 
-    def _sl_check_combine_leg_with_sl_trail(self, start_dt, end_dt, ce_scrip, pe_scrip, trail, sl_trail, o=None, sl=0, intra_sl=0, sl_price=None, intra_sl_price=None, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False):
+    def _sl_check_combine_leg_with_sl_trail(self, start_dt, end_dt, ce_scrip, pe_scrip, trail, sl_trail, o=None, sl=0, intra_sl=0, sl_price=None, intra_sl_price=None, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False, roundtick=False):
         sl_flag, intra_sl_flag, trail_flag, exit_time, pnl = False, False, False, '', 0
 
         try:
@@ -838,6 +930,11 @@ class IntradayBacktest:
                 intra_sl_price_val = (((100 + intra_sl) / 100) * o if intra_sl_price is None else intra_sl_price) if (intra_sl or intra_sl_price) else (h + 1)
                 trail_price = o - trail_limit
 
+                if roundtick or self.market == 'MCX':
+                    sl_price_val = self.round_to_ticksize(sl_price_val, orderside, 'STOPLOSS')
+                    intra_sl_price_val = self.round_to_ticksize(intra_sl_price_val, orderside, 'STOPLOSS')
+                    trail_price = self.round_to_ticksize(trail_price, orderside, 'TARGET')
+
                 mask_sl = scrip_df['close'] >= sl_price_val
                 mask_intra_sl = scrip_df['high'] >= intra_sl_price_val
                 mask_trail = scrip_df['close'] <= trail_price
@@ -846,6 +943,11 @@ class IntradayBacktest:
                 sl_price_val = (((100 - sl) / 100) * o if sl_price is None else sl_price) if (sl or sl_price) else (cl - 1)
                 intra_sl_price_val = (((100 - intra_sl) / 100) * o if intra_sl_price is None else intra_sl_price) if (intra_sl or intra_sl_price) else (l - 1)
                 trail_price = o + trail_limit
+
+                if roundtick or self.market == 'MCX':
+                    sl_price_val = self.round_to_ticksize(sl_price_val, orderside, 'STOPLOSS')
+                    intra_sl_price_val = self.round_to_ticksize(intra_sl_price_val, orderside, 'STOPLOSS')
+                    trail_price = self.round_to_ticksize(trail_price, orderside, 'TARGET')
 
                 mask_sl = scrip_df['close'] <= sl_price_val
                 mask_intra_sl = scrip_df['low'] <= intra_sl_price_val
@@ -878,7 +980,12 @@ class IntradayBacktest:
                         sl_price_val = sl_price_val - sl_trail_limit if (sl or sl_price) else (ch + 1)
                         intra_sl_price_val = intra_sl_price_val - sl_trail_limit if (intra_sl or intra_sl_price) else (h + 1) 
                         trail_price = trail_price - trail_limit
-                        
+
+                        if roundtick or self.market == 'MCX':
+                            sl_price_val = self.round_to_ticksize(sl_price_val, orderside, 'STOPLOSS')
+                            intra_sl_price_val = self.round_to_ticksize(intra_sl_price_val, orderside, 'STOPLOSS')
+                            trail_price = self.round_to_ticksize(trail_price, orderside, 'TARGET')
+
                         mask_sl = scrip_df['close'] >= sl_price_val
                         mask_intra_sl = scrip_df['high'] >= intra_sl_price_val
                         mask_trail = scrip_df['close'] <= trail_price
@@ -886,7 +993,12 @@ class IntradayBacktest:
                         sl_price_val = sl_price_val + sl_trail_limit if (sl or sl_price) else (cl - 1)
                         intra_sl_price_val = intra_sl_price_val + sl_trail_limit if (intra_sl or intra_sl_price) else (l - 1)
                         trail_price = trail_price + trail_limit
-                        
+
+                        if roundtick or self.market == 'MCX':
+                            sl_price_val = self.round_to_ticksize(sl_price_val, orderside, 'STOPLOSS')
+                            intra_sl_price_val = self.round_to_ticksize(intra_sl_price_val, orderside, 'STOPLOSS')
+                            trail_price = self.round_to_ticksize(trail_price, orderside, 'TARGET')
+
                         mask_sl = scrip_df['close'] <= sl_price_val
                         mask_intra_sl = scrip_df['low'] <= intra_sl_price_val
                         mask_trail = scrip_df['close'] >= trail_price
@@ -987,7 +1099,17 @@ class WeeklyBacktest(IntradayBacktest):
         self.options = self.options[["scrip", "date_time", "open", "high", "low", "close"]]
         self.options_data = self.options.set_index(['date_time', 'scrip'])
         self.gap = self.get_gap()
+        self.tick_size = self.TICKS.get(index.lower(), 0.05)
         
+        if self.index in NSE_INDICES:
+            self.market = 'NSE'
+        elif self.index in BSE_INDICES:
+            self.market = 'BSE'
+        elif self.index in MCX_INDICES:
+            self.market = 'MCX'
+        elif self.index in US_INDICES:
+            self.market = 'US'
+
         self.get_single_leg_data = lru_cache(maxsize=4096)(self._get_single_leg_data)
         self.get_straddle_data = lru_cache(maxsize=4096)(self._get_straddle_data)
         self.get_strike = lru_cache(maxsize=4096)(self._get_strike)
@@ -1243,7 +1365,7 @@ class WeeklyBacktest(IntradayBacktest):
             elif only == "PE":
                 return pe_scrip, pe_price, future_price, start_dt
 
-    def sl_check_by_given_data(self, scrip_df, o=None, sl=0, intra_sl=0, sl_price=None, target_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False):
+    def sl_check_by_given_data(self, scrip_df, o=None, sl=0, intra_sl=0, sl_price=None, target_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False, roundtick=False):
         sl_flag, intra_sl_flag, target_flag, exit_time, pnl = False, False, False, '', 0
 
         try:
@@ -1263,6 +1385,11 @@ class WeeklyBacktest(IntradayBacktest):
                 sl_price_val = (((100 + sl) / 100) * o if sl_price is None else sl_price) if (sl or sl_price) else (h + 1)
                 intra_sl_price = ((100 + intra_sl) / 100) * o if intra_sl else (h + 1)
                 target_price = target_price if target_price is not None else (l - 1)
+                
+                if roundtick or self.market == 'MCX':
+                    sl_price_val = self.round_to_ticksize(sl_price_val, orderside, 'STOPLOSS')
+                    intra_sl_price = self.round_to_ticksize(intra_sl_price, orderside, 'STOPLOSS')
+                    target_price = self.round_to_ticksize(target_price, orderside, 'TARGET')
 
                 mask_intra_sl = scrip_df['high'] >= intra_sl_price
                 mask_sl = (scrip_df['close'] if from_candle_close else scrip_df['high']) >= sl_price_val
@@ -1272,6 +1399,11 @@ class WeeklyBacktest(IntradayBacktest):
                 sl_price_val = (((100 - sl) / 100) * o if sl_price is None else sl_price) if (sl or sl_price) else (l - 1)
                 intra_sl_price = ((100 - intra_sl) / 100) * o if intra_sl else (l - 1)
                 target_price = target_price if target_price is not None else (h + 1)
+                
+                if roundtick or self.market == 'MCX':
+                    sl_price_val = self.round_to_ticksize(sl_price_val, orderside, 'STOPLOSS')
+                    intra_sl_price = self.round_to_ticksize(intra_sl_price, orderside, 'STOPLOSS')
+                    target_price = self.round_to_ticksize(target_price, orderside, 'TARGET')
 
                 mask_intra_sl = scrip_df['low'] <= intra_sl_price
                 mask_sl = (scrip_df['close'] if from_candle_close else scrip_df['low']) <= sl_price_val
@@ -1349,7 +1481,7 @@ class WeeklyBacktest(IntradayBacktest):
             else:
                 return (sl_price, sl_flag, intra_sl_flag, target_flag, exit_time, pnl)
 
-    def _sl_check_single_leg(self, start_dt, end_dt, scrip, o=None, sl=0, intra_sl=0, sl_price=None, target_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False):
+    def _sl_check_single_leg(self, start_dt, end_dt, scrip, o=None, sl=0, intra_sl=0, sl_price=None, target_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False, roundtick=False):
         sl_flag, intra_sl_flag, target_flag, exit_time, pnl = False, False, False, '', 0
 
         try:
@@ -1370,6 +1502,11 @@ class WeeklyBacktest(IntradayBacktest):
                 sl_price_val = (((100 + sl) / 100) * o if sl_price is None else sl_price) if (sl or sl_price) else (h + 1)
                 intra_sl_price = ((100 + intra_sl) / 100) * o if intra_sl else (h + 1)
                 target_price = target_price if target_price is not None else (l - 1)
+                
+                if roundtick or self.market == 'MCX':
+                    sl_price_val = self.round_to_ticksize(sl_price_val, orderside, 'STOPLOSS')
+                    intra_sl_price = self.round_to_ticksize(intra_sl_price, orderside, 'STOPLOSS')
+                    target_price = self.round_to_ticksize(target_price, orderside, 'TARGET')
 
                 mask_intra_sl = scrip_df['high'] >= intra_sl_price
                 mask_sl = (scrip_df['close'] if from_candle_close else scrip_df['high']) >= sl_price_val
@@ -1379,6 +1516,11 @@ class WeeklyBacktest(IntradayBacktest):
                 sl_price_val = (((100 - sl) / 100) * o if sl_price is None else sl_price) if (sl or sl_price) else (l - 1)
                 intra_sl_price = ((100 - intra_sl) / 100) * o if intra_sl else (l - 1)
                 target_price = target_price if target_price is not None else (h + 1)
+                
+                if roundtick or self.market == 'MCX':
+                    sl_price_val = self.round_to_ticksize(sl_price_val, orderside, 'STOPLOSS')
+                    intra_sl_price = self.round_to_ticksize(intra_sl_price, orderside, 'STOPLOSS')
+                    target_price = self.round_to_ticksize(target_price, orderside, 'TARGET')
 
                 mask_intra_sl = scrip_df['low'] <= intra_sl_price
                 mask_sl = (scrip_df['close'] if from_candle_close else scrip_df['low']) <= sl_price_val
@@ -1455,8 +1597,8 @@ class WeeklyBacktest(IntradayBacktest):
                 return (exit_time, per_minute_mtm_series)
             else:
                 return (sl_price, sl_flag, intra_sl_flag, target_flag, exit_time, pnl)
-            
-    def _sl_check_combine_leg(self, start_dt, end_dt, ce_scrip, pe_scrip, o=None, sl=0, intra_sl=0, sl_price=None, intra_sl_price=None, target_price=None, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False):
+
+    def _sl_check_combine_leg(self, start_dt, end_dt, ce_scrip, pe_scrip, o=None, sl=0, intra_sl=0, sl_price=None, intra_sl_price=None, target_price=None, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False, roundtick=False):
         sl_flag, intra_sl_flag, target_flag, exit_time, pnl = False, False, False, '', 0
 
         try:
@@ -1477,6 +1619,11 @@ class WeeklyBacktest(IntradayBacktest):
                 sl_price_val = (((100 + sl) / 100) * o if sl_price is None else sl_price) if (sl or sl_price) else (ch + 1)
                 intra_sl_price_val = (((100 + intra_sl) / 100) * o if intra_sl_price is None else intra_sl_price) if (intra_sl or intra_sl_price) else (h + 1)
                 target_price = target_price if target_price is not None else (cl - 1)
+                
+                if roundtick or self.market == 'MCX':
+                    sl_price_val = self.round_to_ticksize(sl_price_val, orderside, 'STOPLOSS')
+                    intra_sl_price_val = self.round_to_ticksize(intra_sl_price_val, orderside, 'STOPLOSS')
+                    target_price = self.round_to_ticksize(target_price, orderside, 'TARGET')
 
                 mask_intra_sl = scrip_df['high'] >= intra_sl_price_val
                 mask_sl = scrip_df['close'] >= sl_price_val
@@ -1486,6 +1633,11 @@ class WeeklyBacktest(IntradayBacktest):
                 sl_price_val = (((100 - sl) / 100) * o if sl_price is None else sl_price) if (sl or sl_price) else (cl - 1)
                 intra_sl_price_val = (((100 - intra_sl) / 100) * o if intra_sl_price is None else intra_sl_price) if (intra_sl or intra_sl_price) else (l - 1)
                 target_price = target_price if target_price is not None else (ch + 1)
+                
+                if roundtick or self.market == 'MCX':
+                    sl_price_val = self.round_to_ticksize(sl_price_val, orderside, 'STOPLOSS')
+                    intra_sl_price_val = self.round_to_ticksize(intra_sl_price_val, orderside, 'STOPLOSS')
+                    target_price = self.round_to_ticksize(target_price, orderside, 'TARGET')
 
                 mask_intra_sl = scrip_df['low'] <= intra_sl_price_val
                 mask_sl = scrip_df['close'] <= sl_price_val
@@ -1682,9 +1834,9 @@ class WeeklyBacktest(IntradayBacktest):
                     return (sl_flag, intra_sl_flag, exit_time, day_wise_mtm, day_wise_mtm2, pnl)
                 else:
                     return (sl_flag, intra_sl_flag, exit_time, pnl)
-                
-    def _decay_check_single_leg(self, start_dt, end_dt, scrip, decay=None, decay_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False):
-        
+
+    def _decay_check_single_leg(self, start_dt, end_dt, scrip, decay=None, decay_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False, roundtick=False):
+
         decay_flag, decay_time = False, ''
         
         try:
@@ -1702,10 +1854,18 @@ class WeeklyBacktest(IntradayBacktest):
 
             if orderside == 'SELL':
                 decay_price = ((100 - decay)/100) * o if decay_price is None else decay_price
+                
+                if roundtick or self.market == 'MCX':
+                    decay_price = self.round_to_ticksize(decay_price, orderside, 'DECAY')
+                
                 mask_decay = (scrip_df['close'] if from_candle_close else scrip_df['low']) <= decay_price
 
             elif orderside == 'BUY':
                 decay_price = ((100 + decay)/100) * o if decay_price is None else decay_price
+                
+                if roundtick or self.market == 'MCX':
+                    decay_price = self.round_to_ticksize(decay_price, orderside, 'DECAY')
+                
                 mask_decay = (scrip_df['close'] if from_candle_close else scrip_df['high']) >= decay_price
 
             if mask_decay.any():

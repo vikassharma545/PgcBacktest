@@ -1,9 +1,12 @@
+import re
 import os
 import sys
 import math
+import ctypes
 import psutil
 import nbformat
 import tempfile
+import fileinput
 import subprocess
 import pandas as pd
 import polars as pl
@@ -25,7 +28,6 @@ def print_heading(title="🗂 Heading"):
 
 def set_terminal_title(title: str):
     if sys.platform == 'win32':
-        import ctypes
         ctypes.windll.kernel32.SetConsoleTitleW(title)
     else:  # Linux, macOS
         sys.stdout.write(f"\33]0;{title}\a")
@@ -96,20 +98,19 @@ def get_pickle_path(meta_data_path):
         if os.path.exists(pickle_path):
             return pickle_path
     
-    indices = ['BANKNIFTY', 'NIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'BANKEX', 'SENSEX']
+    indices = NSE_INDICES + BSE_INDICES
     if all(index in indices for index in meta_indices):
         pickle_path = f"{base_dir}/PICKLE/"
         if os.path.exists(pickle_path):
             return pickle_path
     
-    indices = ['COPPER', 'CRUDEOIL', 'CRUDEOILM', 'GOLD', 'GOLDM', 'NATURALGAS', 'NATGASMINI', 'SILVER', 'SILVERM', 'ZINC']
+    indices = MCX_INDICES
     if all(index in indices for index in meta_indices):
         pickle_path = f"{base_dir}/MCXPICKLE/"
         if os.path.exists(pickle_path):
             return pickle_path
         
-    indices = ['SPXW_FRI', 'SPXW_MON', 'SPXW_THU', 'SPXW_TUE', 'SPX_WED', 'XSP_FRI', 'XSP_MON', 'XSP_THU', 'XSP_TUE', 'XSP_WED']
-    indices += ['TSLA', 'AAPL', 'NVDA', 'AMZN', 'META', 'AMD', 'MSFT', 'NFLX', 'GME', 'BABA']
+    indices = US_INDICES
     if all(index in indices for index in meta_indices):
         pickle_path = f"{base_dir}/USPICKLE/"
         if os.path.exists(pickle_path):
@@ -119,6 +120,39 @@ def get_pickle_path(meta_data_path):
     print("\nPlease select the Pickle folder: ")
     pickle_path = select_folder_gui("Select Pickle Folder")
     return pickle_path
+
+def is_network_disk(path):
+    path = os.path.abspath(path)
+    
+    if sys.platform == 'win32':
+        
+        DRIVE_REMOTE = 4
+        drive_letter = os.path.splitdrive(path)[0].replace(':', '')  # 'Z' from 'Z:\\'
+        drive_type = ctypes.windll.kernel32.GetDriveTypeW(f"{drive_letter}:\\")
+        return drive_type == DRIVE_REMOTE
+    
+    else:
+        # On Linux/Unix
+        network_fstypes = {'nfs', 'cifs', 'smbfs', 'nfs4', 'sshfs', 'afpfs', 'fuse.sshfs'}
+        with open('/proc/mounts', 'r') as f:
+            mounts = [line.split() for line in f if len(line.split()) >= 3]
+
+        abspath = os.path.abspath(path)
+        # Build all parents, longest first
+        parents = []
+        while True:
+            parents.append(abspath)
+            parent = os.path.dirname(abspath)
+            if parent == abspath:
+                break
+            abspath = parent
+        for mount in mounts:
+            mount_point = os.path.abspath(mount[1])
+            fstype = mount[2]
+            for p in parents:
+                if p == mount_point and fstype in network_fstypes:
+                    return True
+        return False
 
 def convert_notebook_to_script(pickle_path: Path, notebook_path: Path, parameter_path: Path, meta_data_path: Path):
     
@@ -173,6 +207,12 @@ def convert_notebook_to_script(pickle_path: Path, notebook_path: Path, parameter
 def get_len_of_parameter_data(code, parameter_path):
     _, parameter_len = get_parameter_data(code, parameter_path)
     return parameter_len
+        
+def modify_script_for_dir_cache(run_scrip_path):
+    pattern = re.compile(r"^(?P<indent>\s*)if\s+not\s+is_file_exists\s*\(\s*output_csv_path\s*,\s*file_name\s*,\s*parameter_len\s*\)\s*:\s*$")
+    for line in fileinput.input(run_scrip_path, inplace=True):
+        new_line = pattern.sub(lambda m: f"{m.group('indent')}if not is_file_exists(output_csv_path, file_name, parameter_len, cache=True):", line)
+        print(new_line, end="")
 
 def get_file_details(meta_data, pickle_path, output_csv_path, code, parameter_len, is_weekly):
 
@@ -359,6 +399,11 @@ if __name__ == "__main__":
     no_of_chunk = math.ceil(parameter_len/chunk_size)
     
     is_weekly = True if ("from_dte" in meta_data.columns) and ("to_dte" in meta_data.columns) else False
+    is_remote = True if is_network_disk(output_csv_path) else False
+    
+    if is_remote:
+        modify_script_for_dir_cache(run_scrip_path)
+        
     weeks_or_dates = "Weeks" if ("from_dte" in meta_data.columns) and ("to_dte" in meta_data.columns) else "Dates"
     index_dates, index_dte_dates, total_dates, total_pending_dates = get_file_details(meta_data, pickle_path, output_csv_path, code, parameter_len, is_weekly)
 

@@ -40,9 +40,16 @@ def get_strike(scrip):
     return strike
 
 chunk_size = 100_000
-def is_file_exists(output_csv_path, file_name, parameter_size, dir_files=None):
+def is_file_exists(output_csv_path, file_name, parameter_size, dir_files=None, cache=False):
     
     total_chunks = (parameter_size - 1) // chunk_size + 1
+
+    if cache:
+        if not hasattr(is_file_exists, '_cached_dir_files'):
+            is_file_exists._cached_dir_files = set(os.listdir(output_csv_path)) if os.path.exists(output_csv_path) else set()
+            dir_files = is_file_exists._cached_dir_files
+        else:
+            dir_files = is_file_exists._cached_dir_files if dir_files is None else dir_files
 
     if dir_files is None:
         return all(os.path.exists(f"{output_csv_path}{file_name} No-{idx}.parquet") for idx in range(1, total_chunks + 1))

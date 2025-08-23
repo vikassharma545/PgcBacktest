@@ -4,6 +4,7 @@ import sys
 import math
 import ctypes
 import psutil
+import pickle
 import nbformat
 import tempfile
 import fileinput
@@ -208,18 +209,39 @@ def get_len_of_parameter_data(code, parameter_path):
     _, parameter_len = get_parameter_data(code, parameter_path)
     return parameter_len
         
-def modify_script_for_dir_cache(run_scrip_path):
+def modify_script_for_dir_cache(run_scrip_path, dir_pickle_path):
+    
+    snippet_template = """import pickle
+with open("{dir_pickle_path}", 'rb') as file:
+    dir_files = pickle.load(file)
+
+"""
+
+    snippet = snippet_template.format(dir_pickle_path=dir_pickle_path.as_posix())
+    
+    with open(run_scrip_path) as f:
+        original = f.read()
+        
+    with open(run_scrip_path, "w") as f:
+        f.write(snippet + original)
+    
     pattern = re.compile(r"^(?P<indent>\s*)if\s+not\s+is_file_exists\s*\(\s*output_csv_path\s*,\s*file_name\s*,\s*parameter_len\s*\)\s*:\s*$")
     for line in fileinput.input(run_scrip_path, inplace=True):
-        new_line = pattern.sub(lambda m: f"{m.group('indent')}if not is_file_exists(output_csv_path, file_name, parameter_len, cache=True):", line)
+        new_line = pattern.sub(lambda m: f"{m.group('indent')}if not is_file_exists(output_csv_path, file_name, parameter_len, dir_files=dir_files):", line)
         print(new_line, end="")
 
-def get_file_details(meta_data, pickle_path, output_csv_path, code, parameter_len, is_weekly):
+def get_file_details(meta_data, pickle_path, notebook_path, output_csv_path, code, parameter_len, is_weekly, is_remote):
 
     index_dates = {}
     index_dte_dates = {}
     total_dates, total_pending_dates = 0, 0
     dir_files = set(os.listdir(output_csv_path)) if os.path.exists(output_csv_path) else set()
+    dir_pickle_path = Path(tempfile.gettempdir()) / f"{notebook_path.stem}_dir.pkl"
+    
+    if is_remote:
+        with open(dir_pickle_path, 'wb') as file:
+            pickle.dump(dir_files, file)
+    
     for row_idx in range(len(meta_data)):
         if meta_data.loc[row_idx, 'run']:
             meta_row = meta_data.iloc[row_idx]
@@ -244,7 +266,7 @@ def get_file_details(meta_data, pickle_path, output_csv_path, code, parameter_le
                     total_pending_dates += len(files_dates)
                     index_dte_dates[(index, from_dte, to_dte)] = sorted(index_dte_dates.get((index, from_dte, to_dte), []) + files_dates)
 
-    return index_dates, index_dte_dates, total_dates, total_pending_dates
+    return index_dates, index_dte_dates, total_dates, total_pending_dates, dir_pickle_path
 
 def create_temp_meta_data(index_dte_dates, meta_data, temp_meta_data_path, no_of_terminal_allowed, is_weekly):
     
@@ -400,13 +422,13 @@ if __name__ == "__main__":
     
     is_weekly = True if ("from_dte" in meta_data.columns) and ("to_dte" in meta_data.columns) else False
     is_remote = True if is_network_disk(output_csv_path) else False
-    
-    if is_remote:
-        modify_script_for_dir_cache(run_scrip_path)
         
     weeks_or_dates = "Weeks" if ("from_dte" in meta_data.columns) and ("to_dte" in meta_data.columns) else "Dates"
-    index_dates, index_dte_dates, total_dates, total_pending_dates = get_file_details(meta_data, pickle_path, output_csv_path, code, parameter_len, is_weekly)
+    index_dates, index_dte_dates, total_dates, total_pending_dates, dir_pickle_path = get_file_details(meta_data, pickle_path, notebook_path, output_csv_path, code, parameter_len, is_weekly, is_remote)
 
+    if is_remote:
+        modify_script_for_dir_cache(run_scrip_path, dir_pickle_path)
+    
     code_details = f'\n#### RUN CODE ####\nCode: {code}\nJupyterCode: {notebook_path.stem} \nParameter: {parameter_path.stem} \nMetaData Parameter: {meta_data_path.stem} \n##################'
 
     file_details = f'\n####### OUTPUT FILES #######\
@@ -465,7 +487,7 @@ if __name__ == "__main__":
     while True:
         
         fun_timer(10)
-        index_dates, index_dte_dates, total_dates, total_pending_dates = get_file_details(meta_data, pickle_path, output_csv_path, code, parameter_len, is_weekly)
+        index_dates, index_dte_dates, total_dates, total_pending_dates, dir_pickle_path = get_file_details(meta_data, pickle_path, notebook_path, output_csv_path, code, parameter_len, is_weekly, is_remote)
 
         file_details = f'\n####### OUTPUT FILES #######\
                         \nNo of Chunks: {no_of_chunk} \
@@ -504,7 +526,13 @@ if __name__ == "__main__":
         ### checking script is running
         new_processes = []
         df = pd.read_csv(temp_meta_data_path)
-        dir_files = set(os.listdir(output_csv_path)) if os.path.exists(output_csv_path) else set()
+        
+        if is_remote:
+            with open(dir_pickle_path, 'rb') as file:
+                dir_files = pickle.load(file)
+        else:
+            dir_files = set(os.listdir(output_csv_path)) if os.path.exists(output_csv_path) else set()
+
         for idx, proc in processes:
             if not proc.is_running():
                 

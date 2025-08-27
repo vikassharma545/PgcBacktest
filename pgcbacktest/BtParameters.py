@@ -450,7 +450,7 @@ def get_parameter_data(code, parameter_path):
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
 
 
-    elif (code == 'SRE') or (code == 'SREW') or (code == 'SRE_SI'):
+    elif (code == 'SRE') or (code == 'SREW') or (code == 'SRE_SI') or (code == 'CSRE'):
 
         #filer intra sl
         parameter['intra_sl'] = parameter.apply(lambda row: row['sl'] + float(row['intra_sl'].split('+')[-1]) if '+' in str(row['intra_sl']) else float(row['intra_sl']), axis=1)

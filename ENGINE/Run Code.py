@@ -2,6 +2,7 @@ import re
 import os
 import sys
 import math
+import time
 import ctypes
 import psutil
 import pickle
@@ -486,145 +487,155 @@ if __name__ == "__main__":
 
     while True:
         
-        fun_timer(10)
-        index_dates, index_dte_dates, total_dates, total_pending_dates, dir_pickle_path = get_file_details(meta_data, pickle_path, notebook_path, output_csv_path, code, parameter_len, is_weekly, is_remote)
-
-        file_details = f'\n####### OUTPUT FILES #######\
-                        \nNo of Chunks: {no_of_chunk} \
-                        \nTotals {weeks_or_dates}: {total_dates} \
-                        \nTotal Files Created: {no_of_chunk*total_dates}\
-                        \n{weeks_or_dates} IndexWise: {index_dates} \
-                        \n############################'
-
-        os.system('clear') if sys.platform == 'linux' else os.system('cls')
-        print(code_details)
-        print(file_details)
-
-        print(f'\nTotal Pending {weeks_or_dates}: {total_pending_dates}')
-        print(f'Total Pending Files: {total_pending_dates*no_of_chunk}')
-        if total_pending_dates == 0:
-            print(f'\nNo Pending {weeks_or_dates} Left all Dates files Complete :)')
-
-            errors, error_files = checking_all_parquet_file(output_csv_path)
+        try:
+            output_dir_path = os.path.dirname(output_csv_path)
+            if not os.path.exists(output_dir_path):
+                raise FileNotFoundError(f"Output Directory {output_dir_path} not available")            
             
-            if errors:
-                for err, error_file in zip(errors, error_files):
-                    print(err)
-                    try:
-                        os.remove(error_file)
-                        print(f"Deleted: {error_file}")
-                    except Exception as e:
-                        print(f"Failed to delete {error_file}: {e}")
+            fun_timer(10)
+            index_dates, index_dte_dates, total_dates, total_pending_dates, dir_pickle_path = get_file_details(meta_data, pickle_path, notebook_path, output_csv_path, code, parameter_len, is_weekly, is_remote)
 
-                continue
-            else:
-                print("All Parquet files are valid.\n")
+            file_details = f'\n####### OUTPUT FILES #######\
+                            \nNo of Chunks: {no_of_chunk} \
+                            \nTotals {weeks_or_dates}: {total_dates} \
+                            \nTotal Files Created: {no_of_chunk*total_dates}\
+                            \n{weeks_or_dates} IndexWise: {index_dates} \
+                            \n############################'
 
-            input("Press Enter to Exit !!!")
-            sys.exit()
+            os.system('clear') if sys.platform == 'linux' else os.system('cls')
+            print(code_details)
+            print(file_details)
 
-        ### checking script is running
-        new_processes = []
-        df = pd.read_csv(temp_meta_data_path)
-        
-        if is_remote:
-            with open(dir_pickle_path, 'rb') as file:
-                dir_files = pickle.load(file)
-        else:
-            dir_files = set(os.listdir(output_csv_path)) if os.path.exists(output_csv_path) else set()
+            print(f'\nTotal Pending {weeks_or_dates}: {total_pending_dates}')
+            print(f'Total Pending Files: {total_pending_dates*no_of_chunk}')
+            if total_pending_dates == 0:
+                print(f'\nNo Pending {weeks_or_dates} Left all Dates files Complete :)')
 
-        for idx, proc in processes:
-            if not proc.is_running():
+                errors, error_files = checking_all_parquet_file(output_csv_path)
                 
-                meta_row = df.loc[int(idx)]
-                
-                if not is_weekly:
-                    index, dte, _, _, _, _, date_lists = get_meta_row_data(meta_row, pickle_path)
-                    pending_files = [current_date.date() for current_date in date_lists if not is_file_exists(output_csv_path, f"{index} {current_date.date()} {code}", parameter_len, dir_files)]
+                if errors:
+                    for err, error_file in zip(errors, error_files):
+                        print(err)
+                        try:
+                            os.remove(error_file)
+                            print(f"Deleted: {error_file}")
+                        except Exception as e:
+                            print(f"Failed to delete {error_file}: {e}")
+
+                    continue
                 else:
-                    index, from_dte, to_dte, _, _, _, _, week_lists = get_meta_row_data(meta_row, pickle_path, weekly=True)
-                    pending_files = [week_dates for week_dates in week_lists if not is_file_exists(output_csv_path, f"{index} {week_dates[0].date()} {week_dates[-1].date()} {from_dte}-{to_dte} {code}", parameter_len, dir_files)]
+                    print("All Parquet files are valid.\n")
 
-                if pending_files:
+                input("Press Enter to Exit !!!")
+                sys.exit()
 
-                    print(f"\nfound closed process in Row {idx}.")
-                    print(f"Pending Files in Row {idx}: {len(pending_files)}")
-                    print(f"Running Row {idx}. ")
-
-                    if sys.platform == 'linux':
-                        pid_file = Path(tempfile.gettempdir()) / f"proc_{code}_{idx}.pid"
-                        cmd = f"echo $$ > {pid_file}; exec {sys.executable} '{run_scrip_path}' -r {idx}"
-                        proc = subprocess.Popen(["gnome-terminal", "--", "bash", "-c", cmd], start_new_session=True)
-                        sleep(3)
-
-                        try:
-                            script_pid = int(pid_file.read_text().strip())
-                        finally:
-                            pid_file.unlink(missing_ok=True)         
-                    else:
-                        proc = subprocess.Popen([sys.executable, run_scrip_path, "-r", str(idx)], creationflags=subprocess.CREATE_NEW_CONSOLE)
-                        sleep(3)
-                        script_pid = proc.pid
-
-                    try:
-                        proc = psutil.Process(script_pid)
-                        new_processes.append((idx, proc))
-                    except psutil.NoSuchProcess:
-                        print(f'Process not Found in Row {idx}')
-                    
-            else:
-                new_processes.append((idx, proc))
-                
-        processes = new_processes
-        print(f"\nRunning Processes: {len(processes)}")
-        print(f"Allowed Processes: {no_of_terminal_allowed}\n")
-
-        if len(processes) <= int(no_of_terminal_allowed*0.7) and (len(processes) == 0 or no_of_terminal_allowed != -1):
-
-            print(f"\nNumber of Terminal Running - {len(processes)} << {no_of_terminal_allowed}")
-            
-            for idx, proc in processes:
-                try:
-                    proc.terminate()
-                    proc.wait(timeout=2)
-                    print(f"Killed - {idx}")
-                except psutil.NoSuchProcess:
-                    print(f"Process already terminated - {idx}")
-                except psutil.TimeoutExpired:
-                    proc.kill()
-                    print(f"Forced kill - {idx}")
-
-            no_of_terminal_allowed = create_temp_meta_data(index_dte_dates, meta_data, temp_meta_data_path, no_of_terminal_allowed, is_weekly)
-
-            ### Run the converted script
-            print('\nCode is About to Restart in ...')
-            fun_timer(len(processes)*2)
-            print('\nRunning Code...\n')
-            processes = []
+            ### checking script is running
+            new_processes = []
             df = pd.read_csv(temp_meta_data_path)
-            for idx, row in df.iterrows():
-                if row.get('run', False):
+            
+            if is_remote:
+                with open(dir_pickle_path, 'rb') as file:
+                    dir_files = pickle.load(file)
+            else:
+                dir_files = set(os.listdir(output_csv_path)) if os.path.exists(output_csv_path) else set()
 
-                    print(f"Running Row {idx}. ")
-
-                    if sys.platform == 'linux':
-                        pid_file = Path(tempfile.gettempdir()) / f"proc_{code}_{idx}.pid"
-                        cmd = f"echo $$ > {pid_file}; exec {sys.executable} '{run_scrip_path}' -r {idx}"
-                        proc = subprocess.Popen(["gnome-terminal", "--", "bash", "-c", cmd], start_new_session=True)
-                        sleep(3)
-                        
-                        try:
-                            script_pid = int(pid_file.read_text().strip())
-                        finally:
-                            pid_file.unlink(missing_ok=True)
-
+            for idx, proc in processes:
+                if not proc.is_running():
+                    
+                    meta_row = df.loc[int(idx)]
+                    
+                    if not is_weekly:
+                        index, dte, _, _, _, _, date_lists = get_meta_row_data(meta_row, pickle_path)
+                        pending_files = [current_date.date() for current_date in date_lists if not is_file_exists(output_csv_path, f"{index} {current_date.date()} {code}", parameter_len, dir_files)]
                     else:
-                        proc = subprocess.Popen([sys.executable, run_scrip_path, "-r", str(idx)], creationflags=subprocess.CREATE_NEW_CONSOLE)
-                        sleep(3)
-                        script_pid = proc.pid
+                        index, from_dte, to_dte, _, _, _, _, week_lists = get_meta_row_data(meta_row, pickle_path, weekly=True)
+                        pending_files = [week_dates for week_dates in week_lists if not is_file_exists(output_csv_path, f"{index} {week_dates[0].date()} {week_dates[-1].date()} {from_dte}-{to_dte} {code}", parameter_len, dir_files)]
 
+                    if pending_files and os.path.exists(output_dir_path):
+
+                        print(f"\nfound closed process in Row {idx}.")
+                        print(f"Pending Files in Row {idx}: {len(pending_files)}")
+                        print(f"Running Row {idx}. ")
+
+                        if sys.platform == 'linux':
+                            pid_file = Path(tempfile.gettempdir()) / f"proc_{code}_{idx}.pid"
+                            cmd = f"echo $$ > {pid_file}; exec {sys.executable} '{run_scrip_path}' -r {idx}"
+                            proc = subprocess.Popen(["gnome-terminal", "--", "bash", "-c", cmd], start_new_session=True)
+                            sleep(3)
+
+                            try:
+                                script_pid = int(pid_file.read_text().strip())
+                            finally:
+                                pid_file.unlink(missing_ok=True)         
+                        else:
+                            proc = subprocess.Popen([sys.executable, run_scrip_path, "-r", str(idx)], creationflags=subprocess.CREATE_NEW_CONSOLE)
+                            sleep(3)
+                            script_pid = proc.pid
+
+                        try:
+                            proc = psutil.Process(script_pid)
+                            new_processes.append((idx, proc))
+                        except psutil.NoSuchProcess:
+                            print(f'Process not Found in Row {idx}')
+                        
+                else:
+                    new_processes.append((idx, proc))
+                    
+            processes = new_processes
+            print(f"\nRunning Processes: {len(processes)}")
+            print(f"Allowed Processes: {no_of_terminal_allowed}\n")
+
+            if len(processes) <= int(no_of_terminal_allowed*0.7) and (len(processes) == 0 or no_of_terminal_allowed != -1):
+
+                print(f"\nNumber of Terminal Running - {len(processes)} << {no_of_terminal_allowed}")
+                
+                for idx, proc in processes:
                     try:
-                        proc = psutil.Process(script_pid)
-                        processes.append((idx, proc))
+                        proc.terminate()
+                        proc.wait(timeout=2)
+                        print(f"Killed - {idx}")
                     except psutil.NoSuchProcess:
-                        print(f'Process not Found in Row {idx}') 
+                        print(f"Process already terminated - {idx}")
+                    except psutil.TimeoutExpired:
+                        proc.kill()
+                        print(f"Forced kill - {idx}")
+
+                no_of_terminal_allowed = create_temp_meta_data(index_dte_dates, meta_data, temp_meta_data_path, no_of_terminal_allowed, is_weekly)
+
+                ### Run the converted script
+                print('\nCode is About to Restart in ...')
+                fun_timer(len(processes)*2)
+                print('\nRunning Code...\n')
+                processes = []
+                df = pd.read_csv(temp_meta_data_path)
+                for idx, row in df.iterrows():
+                    
+                    if row.get('run', False) and os.path.exists(output_dir_path):
+
+                        print(f"Running Row {idx}. ")
+
+                        if sys.platform == 'linux':
+                            pid_file = Path(tempfile.gettempdir()) / f"proc_{code}_{idx}.pid"
+                            cmd = f"echo $$ > {pid_file}; exec {sys.executable} '{run_scrip_path}' -r {idx}"
+                            proc = subprocess.Popen(["gnome-terminal", "--", "bash", "-c", cmd], start_new_session=True)
+                            sleep(3)
+                            
+                            try:
+                                script_pid = int(pid_file.read_text().strip())
+                            finally:
+                                pid_file.unlink(missing_ok=True)
+
+                        else:
+                            proc = subprocess.Popen([sys.executable, run_scrip_path, "-r", str(idx)], creationflags=subprocess.CREATE_NEW_CONSOLE)
+                            sleep(3)
+                            script_pid = proc.pid
+
+                        try:
+                            proc = psutil.Process(script_pid)
+                            processes.append((idx, proc))
+                        except psutil.NoSuchProcess:
+                            print(f'Process not Found in Row {idx}')
+
+        except Exception as e:
+            print(f"Error occurred: {e}, retrying in {5}s...")
+            time.sleep(5)

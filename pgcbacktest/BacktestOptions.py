@@ -1,6 +1,7 @@
 import os
 import gc
 import math
+import time
 import datetime
 import requests
 import traceback
@@ -56,12 +57,23 @@ def is_file_exists(output_csv_path, file_name, parameter_size, dir_files=None, c
     else:
         return all(f"{file_name} No-{idx}.parquet" in dir_files for idx in range(1, total_chunks + 1))
 
-def save_chunk_data(chunk, log_cols, chunck_file_name):
+def save_chunk_data(chunk, log_cols, chunk_file_name):
     chunk = [d for d in chunk if d is not None]
     log_data_chunk = pd.DataFrame(chunk, columns=log_cols)
     log_data_chunk.replace('', np.nan, inplace=True)
-    log_data_chunk.to_parquet(chunck_file_name, index=False)
     
+    dir_path = os.path.dirname(chunk_file_name)
+    while True:
+        try:
+            if not os.path.exists(dir_path):
+                raise FileNotFoundError(f"Directory {dir_path} not available")
+
+            log_data_chunk.to_parquet(chunk_file_name, index=False)
+            return
+        except Exception as e:
+            print(f"Save failed ({e}), retrying in {5}s...")
+            time.sleep(5)
+
 class IntradayBacktest:
     
     PREFIX = {'nifty': 'Nifty', 'banknifty': 'BN', 'finnifty': 'FN', 'midcpnifty': 'MCN', 'sensex': 'SX','bankex': 'BX'}

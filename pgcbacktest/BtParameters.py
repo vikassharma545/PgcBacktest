@@ -236,7 +236,7 @@ def get_parameter_data(code, parameter_path):
         parameter['ut_sl2'] = parameter['ut_sl2'].astype(str).str.upper()
         parameter['orderside'] = parameter['orderside'].str.upper()
         parameter['method'] = parameter['method'].str.upper()
-        
+
     elif (code == 'B120G_PSL'):
         
         # filter - entry < (exit_time|endtime - 5min)
@@ -274,7 +274,7 @@ def get_parameter_data(code, parameter_path):
         parameter['method'] = parameter['method'].str.upper()
 
 
-    elif (code == 'DT') or (code == 'DT_SI') or (code == 'DT_RE'):
+    elif (code == 'DT') or (code == 'DT_SI') or (code == 'DT_RE') or (code =='DT_Trail'):
         # filter - where sl = 0
         parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
         
@@ -283,6 +283,10 @@ def get_parameter_data(code, parameter_path):
         
         if code == 'DT_SI':
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
+
+        if code =='DT_Trail':
+            parameter.loc[parameter['trail_sl'] == 0, 'trail_profit'] = 0
+            parameter.loc[parameter['trail_profit'] == 0, 'trail_sl'] = 0
             
     elif (code == 'DT_FS_SRE'):
         # filter - where dt_sl = 0

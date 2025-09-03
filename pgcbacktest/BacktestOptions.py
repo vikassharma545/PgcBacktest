@@ -713,32 +713,38 @@ class IntradayBacktest:
         try:
             if scrip_df.empty: raise DataEmptyError
 
+            start_dt = scrip_df['date_time'].iloc[0]
             o = scrip_df['close'].iloc[0]
 
             if from_next_minute: scrip_df = scrip_df.iloc[1:]
             if scrip_df.empty: raise DataEmptyError
                 
             h, l, c = scrip_df['high'].max(), scrip_df['low'].min(), scrip_df['close'].iloc[-1]
-
-            if orderside == 'SELL':
-                decay_price = ((100 - decay)/100) * o if decay_price is None else decay_price
-                
-                if roundtick or self.market == 'MCX':
-                    decay_price = self.round_to_ticksize(decay_price, orderside, 'DECAY')
-
-                mask_decay = (scrip_df['close'] if from_candle_close else scrip_df['low']) <= decay_price
-
-            elif orderside == 'BUY':
-                decay_price = ((100 + decay)/100) * o if decay_price is None else decay_price
-                
-                if roundtick or self.market == 'MCX':
-                    decay_price = self.round_to_ticksize(decay_price, orderside, 'DECAY')
-
-                mask_decay = (scrip_df['close'] if from_candle_close else scrip_df['high']) >= decay_price
-
-            if mask_decay.any():
+            
+            if decay == 0 or decay_price == -1:
+                decay_price = o
                 decay_flag = True
-                decay_time = scrip_df.loc[mask_decay.idxmax(), 'date_time']
+                decay_time = start_dt
+            else:
+                if orderside == 'SELL':
+                    decay_price = ((100 - decay)/100) * o if decay_price is None else decay_price
+                    
+                    if roundtick or self.market == 'MCX':
+                        decay_price = self.round_to_ticksize(decay_price, orderside, 'DECAY')
+
+                    mask_decay = (scrip_df['close'] if from_candle_close else scrip_df['low']) <= decay_price
+
+                elif orderside == 'BUY':
+                    decay_price = ((100 + decay)/100) * o if decay_price is None else decay_price
+                    
+                    if roundtick or self.market == 'MCX':
+                        decay_price = self.round_to_ticksize(decay_price, orderside, 'DECAY')
+
+                    mask_decay = (scrip_df['close'] if from_candle_close else scrip_df['high']) >= decay_price
+
+                if mask_decay.any():
+                    decay_flag = True
+                    decay_time = scrip_df.loc[mask_decay.idxmax(), 'date_time']
 
         except DataEmptyError:
             decay_flag, decay_time = False, ''
@@ -768,26 +774,31 @@ class IntradayBacktest:
             if scrip_df.empty: raise DataEmptyError
                 
             h, l, c = scrip_df['high'].max(), scrip_df['low'].min(), scrip_df['close'].iloc[-1]
-
-            if orderside == 'SELL':
-                decay_price = ((100 - decay)/100) * o if decay_price is None else decay_price
-                
-                if roundtick or self.market == 'MCX':
-                    decay_price = self.round_to_ticksize(decay_price, orderside, 'DECAY')
-
-                mask_decay = (scrip_df['close'] if from_candle_close else scrip_df['low']) <= decay_price
-
-            elif orderside == 'BUY':
-                decay_price = ((100 + decay)/100) * o if decay_price is None else decay_price
-                
-                if roundtick or self.market == 'MCX':
-                    decay_price = self.round_to_ticksize(decay_price, orderside, 'DECAY')
-
-                mask_decay = (scrip_df['close'] if from_candle_close else scrip_df['high']) >= decay_price
-
-            if mask_decay.any():
+            
+            if decay == 0 or decay_price == -1:
+                decay_price = o
                 decay_flag = True
-                decay_time = scrip_df.loc[mask_decay.idxmax(), 'date_time']
+                decay_time = start_dt
+            else:
+                if orderside == 'SELL':
+                    decay_price = ((100 - decay)/100) * o if decay_price is None else decay_price
+                    
+                    if roundtick or self.market == 'MCX':
+                        decay_price = self.round_to_ticksize(decay_price, orderside, 'DECAY')
+
+                    mask_decay = (scrip_df['close'] if from_candle_close else scrip_df['low']) <= decay_price
+
+                elif orderside == 'BUY':
+                    decay_price = ((100 + decay)/100) * o if decay_price is None else decay_price
+                    
+                    if roundtick or self.market == 'MCX':
+                        decay_price = self.round_to_ticksize(decay_price, orderside, 'DECAY')
+
+                    mask_decay = (scrip_df['close'] if from_candle_close else scrip_df['high']) >= decay_price
+
+                if mask_decay.any():
+                    decay_flag = True
+                    decay_time = scrip_df.loc[mask_decay.idxmax(), 'date_time']
 
         except DataEmptyError:
             decay_flag, decay_time = False, ''
@@ -1870,26 +1881,31 @@ class WeeklyBacktest(IntradayBacktest):
             if scrip_df.empty: raise DataEmptyError
                 
             h, l, c = scrip_df['high'].max(), scrip_df['low'].min(), scrip_df['close'].iloc[-1]
-
-            if orderside == 'SELL':
-                decay_price = ((100 - decay)/100) * o if decay_price is None else decay_price
-                
-                if roundtick or self.market == 'MCX':
-                    decay_price = self.round_to_ticksize(decay_price, orderside, 'DECAY')
-                
-                mask_decay = (scrip_df['close'] if from_candle_close else scrip_df['low']) <= decay_price
-
-            elif orderside == 'BUY':
-                decay_price = ((100 + decay)/100) * o if decay_price is None else decay_price
-                
-                if roundtick or self.market == 'MCX':
-                    decay_price = self.round_to_ticksize(decay_price, orderside, 'DECAY')
-                
-                mask_decay = (scrip_df['close'] if from_candle_close else scrip_df['high']) >= decay_price
-
-            if mask_decay.any():
+            
+            if decay == 0 or decay_price == -1:
+                decay_price = o
                 decay_flag = True
-                decay_time = scrip_df.loc[mask_decay.idxmax(), 'date_time']
+                decay_time = start_dt
+            else:
+                if orderside == 'SELL':
+                    decay_price = ((100 - decay)/100) * o if decay_price is None else decay_price
+                    
+                    if roundtick or self.market == 'MCX':
+                        decay_price = self.round_to_ticksize(decay_price, orderside, 'DECAY')
+                    
+                    mask_decay = (scrip_df['close'] if from_candle_close else scrip_df['low']) <= decay_price
+
+                elif orderside == 'BUY':
+                    decay_price = ((100 + decay)/100) * o if decay_price is None else decay_price
+                    
+                    if roundtick or self.market == 'MCX':
+                        decay_price = self.round_to_ticksize(decay_price, orderside, 'DECAY')
+                    
+                    mask_decay = (scrip_df['close'] if from_candle_close else scrip_df['high']) >= decay_price
+
+                if mask_decay.any():
+                    decay_flag = True
+                    decay_time = scrip_df.loc[mask_decay.idxmax(), 'date_time']
 
         except DataEmptyError:
             decay_flag, decay_time = False, ''

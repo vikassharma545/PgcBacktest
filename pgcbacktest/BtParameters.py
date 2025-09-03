@@ -274,7 +274,7 @@ def get_parameter_data(code, parameter_path):
         parameter['method'] = parameter['method'].str.upper()
 
 
-    elif (code == 'DT') or (code == 'DT_SI') or (code == 'DT_RE') or (code =='DT_Trail'):
+    elif (code == 'DT') or (code == 'DT_SI') or (code == 'DT_RE') or (code =='DT_Trail') or (code == 'DTN'):
         # filter - where sl = 0
         parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
         

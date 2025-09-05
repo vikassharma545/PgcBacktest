@@ -274,7 +274,7 @@ def get_parameter_data(code, parameter_path):
         parameter['method'] = parameter['method'].str.upper()
 
 
-    elif (code == 'DT') or (code == 'DT_SI') or (code == 'DT_RE') or (code =='DT_Trail') or (code == 'DTN'):
+    elif (code == 'DT') or (code == 'DT_SI') or (code == 'DT_RE') or (code =='DT_Trail') or (code == 'DTN') or (code == 'DTB_RE'):
         # filter - where sl = 0
         parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
         
@@ -620,8 +620,10 @@ def get_parameter_data(code, parameter_path):
 
     elif code == 'IRONFLY':
         parameter = parameter[parameter['sl'] != 0]
-        
-        
+    
+    elif code == 'StraddleSELL_LaterHedgeBRE':
+        parameter['method'] = parameter['method'].str.upper()
+    
     elif code == 'MAC':
         
         parameter = parameter[parameter['short_period'] < parameter['long_period']]

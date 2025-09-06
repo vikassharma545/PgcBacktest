@@ -616,7 +616,13 @@ def get_parameter_data(code, parameter_path):
         parameter['orderside'] = parameter['orderside'].str.upper()
         parameter['ut_orderside'] = parameter['ut_orderside'].str.upper()
         parameter['ut_method'] = parameter['ut_method'].str.upper()
-
+        
+    elif code == 'SRE_PS_W_Straddle':
+        parameter['orderside'] = parameter['orderside'].str.upper()
+        parameter['method'] = parameter['method'].str.upper()
+        
+        parameter = parameter[parameter['movement1'] >= 50]
+        parameter = parameter[parameter['movement2'] >= 100]
 
     elif code == 'IRONFLY':
         parameter = parameter[parameter['sl'] != 0]
@@ -630,7 +636,6 @@ def get_parameter_data(code, parameter_path):
         parameter['orderside'] = parameter['orderside'].str.upper()
         parameter['short_type'] = parameter['short_type'].str.upper()
         parameter['long_type'] = parameter['long_type'].str.upper()
-
 
     parameter.drop_duplicates(inplace=True, ignore_index=True)
     return parameter, len(parameter)

@@ -1,0 +1,5 @@
+entry_time,exit_time,orderside,sl,intra_sl,om,fixed_or_dynamic,normal_or_cut,synthetic_future,dte1re,dte2re,dte3re,dte4re,dte5re
+09:20:00,15:29:00,sell,70,sl+50,0,Dynamic,Normal,TRUE,3,3,3,3,3
+,,,80,,,,,,2,2,2,2,2
+,,,90,,,,,,1,1,1,1,1
+,,,100,,,,,,,,,,

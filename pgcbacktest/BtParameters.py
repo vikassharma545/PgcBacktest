@@ -476,7 +476,7 @@ def get_parameter_data(code, parameter_path):
         parameter['orderside'] = parameter['orderside'].str.upper()
         
 
-    elif code == 'SREW_RANGE':
+    elif (code == 'SREW_RANGE') or (code == 'SREW_RANGE_TRAIL'):
 
         #filer intra sl
         parameter['intra_sl'] = parameter.apply(lambda row: row['sl'] + float(row['intra_sl'].split('+')[-1]) if '+' in str(row['intra_sl']) else float(row['intra_sl']), axis=1)

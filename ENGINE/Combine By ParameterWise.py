@@ -135,8 +135,9 @@ if __name__ == "__main__":
         sleep(2)
         sys.exit(0)
     
-    
-    combine_folder_path = Path(str(parquet_files_folder_path).replace('_output', '_output_ParameterWise'))
+    combine_folder_path = parquet_files_folder_path.parent / f"{code}_output_ParameterWise"
+    print(f"\nCombine Files Folder Path: {combine_folder_path}\n")
+
     shutil.rmtree(combine_folder_path, ignore_errors=True)
     os.makedirs(combine_folder_path, exist_ok=True)
 

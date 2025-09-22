@@ -14,6 +14,9 @@ import dask.dataframe as dd
 import pyarrow.parquet as pq
 from tkinter import Tk, filedialog
 
+from pgcbacktest.BtParameters import *
+from pgcbacktest.BacktestOptions import *
+
 os.environ["POLARS_MAX_THREADS"] = str(max(1, round(os.cpu_count() * 0.7)))
 pl.enable_string_cache()
 
@@ -61,20 +64,19 @@ def get_dte_csv_path(files_indices):
         dte_csv_path = select_file_gui(title="Select DTE CSV File", filetypes=[("CSV files", "*.csv")])
         return dte_csv_path
     
-    indices = ['BANKNIFTY', 'NIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'BANKEX', 'SENSEX']
+    indices = NSE_INDICES + BSE_INDICES
     if all(index in indices for index in files_indices):
         dte_csv_path = f"{base_dir}/PICKLE/DTE.csv"
         if os.path.exists(dte_csv_path):
             return dte_csv_path
     
-    indices = ['COPPER', 'CRUDEOIL', 'CRUDEOILM', 'GOLD', 'GOLDM', 'NATURALGAS', 'NATGASMINI', 'SILVER', 'SILVERM', 'ZINC']
+    indices = MCX_INDICES
     if all(index in indices for index in files_indices):
         dte_csv_path = f"{base_dir}/MCXPICKLE/DTE.csv"
         if os.path.exists(dte_csv_path):
             return dte_csv_path
         
-    indices = ['SPXW_FRI', 'SPXW_MON', 'SPXW_THU', 'SPXW_TUE', 'SPX_WED', 'XSP_FRI', 'XSP_MON', 'XSP_THU', 'XSP_TUE', 'XSP_WED']
-    indices += ['TSLA', 'AAPL', 'NVDA', 'AMZN', 'META', 'AMD', 'MSFT', 'NFLX', 'GME', 'BABA']
+    indices = US_INDICES
     if all(index in indices for index in files_indices):
         dte_csv_path = f"{base_dir}/USPICKLE/DTE.csv"
         if os.path.exists(dte_csv_path):

@@ -21,8 +21,21 @@ US_INDICES = ['AAPL', 'AMD', 'AMZN', 'BABA', 'GOOGL', 'HOOD', 'INTC', 'MARA', 'M
 class DataEmptyError(Exception):
     pass
 
-def get_pm_time_index(date, meta_start_time, meta_end_time):
-    time_index = pd.date_range(datetime.datetime.combine(date, meta_start_time), datetime.datetime.combine(date, meta_end_time), freq='1min')
+def get_pm_time_index(dates, meta_start_time, meta_end_time):
+    
+    if isinstance(dates, (list, tuple, pd.Series)):
+        time_index = pd.DatetimeIndex([])
+        for date in dates:
+            daily_index = pd.date_range(
+                start=datetime.datetime.combine(date, meta_start_time),
+                end=datetime.datetime.combine(date, meta_end_time),
+                freq='1min'
+            )
+            time_index = time_index.append(daily_index)
+    else:
+        date = dates
+        time_index = pd.date_range(datetime.datetime.combine(date, meta_start_time), datetime.datetime.combine(date, meta_end_time), freq='1min')
+    
     return time_index
 
 def set_pm_time_index(data, time_index):

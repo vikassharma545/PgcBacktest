@@ -485,6 +485,18 @@ def get_parameter_data(code, parameter_path):
         parameter['fixed_or_dynamic'] = parameter['fixed_or_dynamic'].str.upper()
         parameter['normal_or_cut'] = parameter['normal_or_cut'].str.upper()
         parameter['orderside'] = parameter['orderside'].str.upper()
+        
+    elif code == "SREW_RANGE_PSL":
+        
+        parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
+        parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
+        
+        parameter['intra_sl'] = parameter.apply(lambda row: row['sl'] + float(row['intra_sl'].split('+')[-1]) if '+' in str(row['intra_sl']) else float(row['intra_sl']), axis=1)
+        parameter = parameter[~((parameter['intra_sl'] != 0) & (parameter['intra_sl'] <= parameter['sl']))]
+
+        parameter['fixed_or_dynamic'] = parameter['fixed_or_dynamic'].str.upper()
+        parameter['normal_or_cut'] = parameter['normal_or_cut'].str.upper()
+        parameter['orderside'] = parameter['orderside'].str.upper()
 
 
     elif (code == 'SRE_PSL') or (code == 'SRE_SI_PSL'):

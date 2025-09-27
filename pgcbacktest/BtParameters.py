@@ -357,7 +357,21 @@ def get_parameter_data(code, parameter_path):
         
         if code == 'NRE_SI':
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
-
+            
+    elif (code == 'NREW_PSL'):
+        
+        # filter - entry < (exit_time - 5min)
+        parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
+        parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
+        
+        # filter - where sl = 0
+        parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
+        
+        parameter['re_sl'] = parameter.apply(lambda row: row['sl'] + float(row['re_sl'].split('+')[-1]) if '+' in str(row['re_sl']) else float(row['re_sl']), axis=1)
+        
+        parameter['trade_interval'] = parameter['trade_interval'].str.upper()
+        parameter['orderside'] = parameter['orderside'].str.upper()
+        parameter['method'] = parameter['method'].str.upper()
 
     elif (code == 'NRE_PSL') or (code == 'NRE_SI_PSL'):
         
@@ -559,7 +573,7 @@ def get_parameter_data(code, parameter_path):
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
     
     
-    elif (code == 'SUT_PSL') or (code == 'SUT_SI_PSL'):
+    elif (code == 'SUT_PSL') or (code == 'SUT_SI_PSL') or (code == 'SUTW_PSL'):
         
         parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
         parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]

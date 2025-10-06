@@ -513,7 +513,7 @@ def get_parameter_data(code, parameter_path):
         parameter['orderside'] = parameter['orderside'].str.upper()
 
 
-    elif (code == 'SRE_PSL') or (code == 'SRE_SI_PSL'):
+    elif (code == 'SRE_PSL') or (code == 'SRE_SI_PSL') or (code == 'SREW_PSL'):
         
         parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
         parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]

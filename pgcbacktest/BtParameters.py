@@ -643,7 +643,7 @@ def get_parameter_data(code, parameter_path):
         parameter['ut_orderside'] = parameter['ut_orderside'].str.upper()
         parameter['ut_method'] = parameter['ut_method'].str.upper()
         
-    elif code == 'SRE_PS_W_Straddle':
+    elif (code == 'SRE_PS_W_Straddle') or (code == 'SRE_PS_W_Straddle_PSL'):
         parameter['orderside'] = parameter['orderside'].str.upper()
         parameter['method'] = parameter['method'].str.upper()
         

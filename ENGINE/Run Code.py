@@ -81,7 +81,7 @@ def menu_driver(options, msg=''):
 def get_pickle_path(meta_data_path):
     
     if sys.platform == "win32":
-        base_dir = "C:"
+        base_dir = "P:"
     elif sys.platform == "linux":
         base_dir = os.environ['HOME'] # "/home/user"
     else:

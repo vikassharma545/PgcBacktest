@@ -55,7 +55,7 @@ def select_file_gui(title="Select a File", filetypes=None, initialdir=".") -> Pa
 def get_dte_csv_path(files_indices):
     
     if sys.platform == "win32":
-        base_dir = "C:"
+        base_dir = "P:"
     elif sys.platform == "linux":
         base_dir = os.environ['HOME'] # "/home/user"
     else:

@@ -110,9 +110,9 @@ class IntradayBacktest:
         
         self.pickle_path, self.index, self.current_date, self.dte, self.meta_start_time, self.meta_end_time = pickle_path, index, current_date, dte, start_time, end_time
         self.__future_pickle_path, self.__option_pickle_path = self.get_future_option_path(index)
-        self.future_data = pd.read_pickle(self.__future_pickle_path.format(date=self.current_date.date())).set_index(['date_time'])
+        self.future_data = pd.read_parquet(self.__future_pickle_path.format(date=self.current_date.date())).set_index(['date_time'])
         self.future_data = self.future_data[["open", "high", "low", "close"]]
-        self.options = pd.read_pickle(self.__option_pickle_path.format(date=self.current_date.date()))
+        self.options = pd.read_parquet(self.__option_pickle_path.format(date=self.current_date.date()))
         self.options = self.options[["scrip", "date_time", "open", "high", "low", "close"]]
         self.options = self.options[(self.options['date_time'].dt.time >= self.meta_start_time) & (self.options['date_time'].dt.time <= self.meta_end_time)]
         self.options_data = self.options.set_index(['date_time', 'scrip'])
@@ -140,8 +140,8 @@ class IntradayBacktest:
 
     def get_future_option_path(self, index):
         index_lower = index.lower()
-        future_pickle_path = f'{self.pickle_path}{self.PREFIX.get(index_lower, index)} Future/{{date}}_{index_lower}_future.pkl'
-        option_pickle_path = f'{self.pickle_path}{self.PREFIX.get(index_lower, index)} Options/{{date}}_{index_lower}.pkl'
+        future_pickle_path = f'{self.pickle_path}{self.PREFIX.get(index_lower, index)} Future/{{date}}_{index_lower}_future.parquet'
+        option_pickle_path = f'{self.pickle_path}{self.PREFIX.get(index_lower, index)} Options/{{date}}_{index_lower}.parquet'
         return future_pickle_path, option_pickle_path
 
     def Cal_slipage(self, price):
@@ -1133,11 +1133,11 @@ class WeeklyBacktest(IntradayBacktest):
         
         self.current_week_dates = sorted(set(([self.week_dates[0]] * (7 - len(self.week_dates)) + self.week_dates)[-from_dte : None if to_dte == 1 else -to_dte + 1]))
         self.__future_pickle_path, self.__option_pickle_path = self.get_future_option_path(index)
-        self.future_data = pd.concat([pd.read_pickle(self.__future_pickle_path.format(date=current_date.date())) for current_date in self.current_week_dates])
+        self.future_data = pd.concat([pd.read_parquet(self.__future_pickle_path.format(date=current_date.date())) for current_date in self.current_week_dates])
         self.future_data.sort_values(by='date_time', inplace=True)
         self.future_data.set_index('date_time', inplace=True)
         self.future_data = self.future_data[["open", "high", "low", "close"]]
-        self.options = pd.concat([pd.read_pickle(self.__option_pickle_path.format(date=current_date.date())) for current_date in self.current_week_dates])
+        self.options = pd.concat([pd.read_parquet(self.__option_pickle_path.format(date=current_date.date())) for current_date in self.current_week_dates])
         self.options = self.options[(self.options['date_time'].dt.time >= start_time) & (self.options['date_time'].dt.time <= end_time)]
         self.options = self.options[["scrip", "date_time", "open", "high", "low", "close"]]
         self.options_data = self.options.set_index(['date_time', 'scrip'])
@@ -2073,11 +2073,11 @@ class MonthlyBacktest(WeeklyBacktest):
         
         self.current_month_dates = sorted(set(([self.month_dates[0]] * (31 - len(self.month_dates)) + self.month_dates)[-from_dte : None if to_dte == 1 else -to_dte + 1]))
         self.__future_pickle_path, self.__option_pickle_path = self.get_future_option_path(index)
-        self.future_data = pd.concat([pd.read_pickle(self.__future_pickle_path.format(date=current_date.date())) for current_date in self.current_month_dates])
+        self.future_data = pd.concat([pd.read_parquet(self.__future_pickle_path.format(date=current_date.date())) for current_date in self.current_month_dates])
         self.future_data.sort_values(by='date_time', inplace=True)
         self.future_data.set_index('date_time', inplace=True)
-        
-        self.options = pd.concat([pd.read_pickle(self.__option_pickle_path.format(date=current_date.date())) for current_date in self.current_month_dates])
+
+        self.options = pd.concat([pd.read_parquet(self.__option_pickle_path.format(date=current_date.date())) for current_date in self.current_month_dates])
         self.options = self.options[(self.options['date_time'].dt.time >= start_time) & (self.options['date_time'].dt.time <= end_time)]
         self.options_data = self.options.set_index(['date_time', 'scrip'])
         self.gap = self.get_gap()

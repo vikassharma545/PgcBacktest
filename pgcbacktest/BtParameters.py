@@ -483,7 +483,11 @@ def get_parameter_data(code, parameter_path):
     elif (code == 'SRE_SEPARATE_LEG_SL'):
 
         parameter['orderside'] = parameter['orderside'].str.upper()
-            
+
+    elif (code == 'CSRE_HCLP'):
+
+        parameter['orderside'] = parameter['orderside'].str.upper()
+        parameter['method'] = parameter['method'].str.upper()
 
     elif (code == 'SRE_PREMIUM_SHIFT') or (code == 'SRE_PREMIUM_SHIFT_PSL') or (code == 'SRE_PREMIUM_SHIFT_TRAIL') or (code == 'SRE_PREMIUM_SHIFT_TRAIL_PSL') or (code == 'SRE_PREMIUM_SHIFT_ACTION') or (code == 'SRE_PREMIUM_SHIFT_ACTION_PSL'):
         

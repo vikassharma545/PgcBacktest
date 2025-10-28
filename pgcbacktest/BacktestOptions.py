@@ -127,6 +127,8 @@ class IntradayBacktest:
             self.market = 'MCX'
         elif self.index in US_INDICES:
             self.market = 'US'
+        else:
+            self.market = 'OTHER'
 
         self.get_single_leg_data = lru_cache(maxsize=4096)(self._get_single_leg_data)
         self.get_straddle_data = lru_cache(maxsize=4096)(self._get_straddle_data)
@@ -1152,6 +1154,8 @@ class WeeklyBacktest(IntradayBacktest):
             self.market = 'MCX'
         elif self.index in US_INDICES:
             self.market = 'US'
+        else:
+            self.market = 'OTHER'
 
         self.get_single_leg_data = lru_cache(maxsize=4096)(self._get_single_leg_data)
         self.get_straddle_data = lru_cache(maxsize=4096)(self._get_straddle_data)

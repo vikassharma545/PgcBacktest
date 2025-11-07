@@ -274,7 +274,7 @@ def get_parameter_data(code, parameter_path):
         parameter['method'] = parameter['method'].str.upper()
 
 
-    elif (code == 'DT') or (code == 'DT_SI') or (code == 'DT_RE') or (code =='DT_Trail') or (code == 'DTN') or (code == 'DTB_RE'):
+    elif (code == 'DT') or (code == 'DT_SI') or (code == 'DT_RE') or (code =='DT_TRAIL') or (code == 'DTN') or (code == 'DTB_RE'):
         # filter - where sl = 0
         parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
         
@@ -284,10 +284,16 @@ def get_parameter_data(code, parameter_path):
         if code == 'DT_SI':
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
 
-        if code =='DT_Trail':
-            parameter.loc[parameter['trail_sl'] == 0, 'trail_profit'] = 0
-            parameter.loc[parameter['trail_profit'] == 0, 'trail_sl'] = 0
+        if code =='DT_TRAIL':
+            parameter = parameter[parameter['trail_profit'] >= parameter['trail_sl']]
+                        
+            parameter.loc[parameter['sl'] == 0, 'trail_profit'] = 0
+            parameter.loc[parameter['sl'] == 0, 'trail_sl'] = 0
             
+            parameter.loc[parameter['trail_sl'] == 0, 'trail_profit'] = 0
+            parameter.loc[parameter['trail_profit'] == 0, 'trail_sl'] = parameter['sl']
+
+
     elif (code == 'DT_FS_SRE'):
         # filter - where dt_sl = 0
         parameter.loc[parameter['dt_sl'] == 0, 'method'] = 'HL'

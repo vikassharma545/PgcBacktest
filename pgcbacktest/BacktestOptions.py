@@ -829,7 +829,7 @@ class IntradayBacktest:
         else:
             return decay_price, decay_flag, decay_time
         
-    def _sl_check_single_leg_with_sl_trail(self, start_dt, end_dt, scrip, trail, sl_trail, o=None, sl=0, sl_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False, roundtick=False):
+    def _sl_check_single_leg_with_sl_trail(self, start_dt, end_dt, scrip, o=None, sl=0, sl_price=None, trail=0, sl_trail=0, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False, roundtick=False):
         sl_flag, trail_flag, exit_time, pnl = False, False, '', 0
 
         try:
@@ -844,73 +844,105 @@ class IntradayBacktest:
 
             h, l, c = scrip_df['high'].max(), scrip_df['low'].min(), scrip_df['close'].iloc[-1]
             
-            trail_limit = o * (trail / 100)
-            sl_trail_limit = trail_limit * (sl_trail / 100)
-
+            exit_price = None
+            
             if orderside == 'SELL':
                 sl_price = ((100 + sl) / 100) * o if sl_price is None else sl_price
-                trail_price = o - trail_limit
                 
                 if roundtick or self.market == 'MCX':
                     sl_price = self.round_to_ticksize(sl_price, orderside, 'STOPLOSS')
-                    trail_price = self.round_to_ticksize(trail_price, orderside, 'TARGET')
+                    
+                if trail != 0:
+                    
+                    trail_price = ((100 - trail) / 100) * o
 
-                mask_sl = (scrip_df['close'] if from_candle_close else scrip_df['high']) >= sl_price
-                mask_trail = (scrip_df['close'] if from_candle_close else scrip_df['low']) <= trail_price
-
-            elif orderside == 'BUY':
-                sl_price = ((100 - sl) / 100) * o if sl_price is None else sl_price
-                trail_price = o + trail_limit            
-                
-                if roundtick or self.market == 'MCX':
-                    sl_price = self.round_to_ticksize(sl_price, orderside, 'STOPLOSS')
-                    trail_price = self.round_to_ticksize(trail_price, orderside, 'TARGET')
-
-                mask_sl = (scrip_df['close'] if from_candle_close else scrip_df['low']) <= sl_price
-                mask_trail = (scrip_df['close'] if from_candle_close else scrip_df['high']) >= trail_price
-
-            combined_mask = mask_sl | mask_trail
-
-            exit_price = None
-            is_sell = orderside == 'SELL'
-
-            while combined_mask.any():
-
-                first_row = scrip_df.loc[combined_mask.idxmax()]
-
-                if (is_sell and first_row['high'] >= sl_price) or (not is_sell and first_row['low'] <= sl_price):
-                    sl_flag = True
-                    exit_time = first_row['date_time']
-                    exit_price = first_row['close'] if from_candle_close else sl_price
-                    break
+                    if roundtick or self.market == 'MCX':
+                        trail_price = self.round_to_ticksize(trail_price, orderside, 'TARGET')
+                        
+                    for row in scrip_df.itertuples():
+                        
+                        if (from_candle_close and row.close >= sl_price) or (not from_candle_close and row.high >= sl_price):
+                            sl_flag = True
+                            exit_time = row.date_time
+                            exit_price = row.close if from_candle_close else sl_price
+                            break
+                        elif (from_candle_close and row.close <= trail_price) or (not from_candle_close and row.low <= trail_price):
+                            trail_flag = True
+                                
+                            sl_price = sl_price * (1 - (sl_trail/100))
+                            trail_price = trail_price * (1 - (trail/100))
+                            
+                            if roundtick or self.market == 'MCX':
+                                sl_price = self.round_to_ticksize(sl_price, orderside, 'STOPLOSS')
+                                trail_price = self.round_to_ticksize(trail_price, orderside, 'TARGET')
+                            
+                            if sl_price <= trail_price:
+                                sl_flag = True
+                                exit_time = row.date_time
+                                exit_price = row.close if from_candle_close else trail_price
+                                break
                 else:
-                    trail_flag = True
-                    trail_time = first_row['date_time']
-
-                    if orderside == 'SELL':
-                        sl_price = sl_price - sl_trail_limit
-                        trail_price = trail_price - trail_limit
+                    # trailing at every minute
+                    for row in scrip_df.itertuples():
                         
-                        if roundtick or self.market == 'MCX':
-                            sl_price = self.round_to_ticksize(sl_price, orderside, 'STOPLOSS')
-                            trail_price = self.round_to_ticksize(trail_price, orderside, 'TARGET')
+                        if (from_candle_close and row.close >= sl_price) or (not from_candle_close and row.high >= sl_price):
+                            sl_flag = True
+                            exit_time = row.date_time
+                            exit_price = row.close if from_candle_close else sl_price
+                            break
+                        else:
+                            sl_price = min(sl_price, ((100 + sl) / 100) * row.close) if from_candle_close else min(sl_price, ((100 + sl) / 100) * row.low)
+                            if roundtick or self.market == 'MCX':
+                                sl_price = self.round_to_ticksize(sl_price, orderside, 'STOPLOSS')
+                    
+            elif orderside == 'BUY':
+                
+                sl_price = ((100 - sl) / 100) * o if sl_price is None else sl_price
+                if roundtick or self.market == 'MCX':
+                    sl_price = self.round_to_ticksize(sl_price, orderside, 'STOPLOSS')
+                
+                if trail != 0:
+                    
+                    trail_price = ((100 + trail) / 100) * o
 
-                        mask_sl = (scrip_df['close'] if from_candle_close else scrip_df['high']) >= sl_price
-                        mask_trail = (scrip_df['close'] if from_candle_close else scrip_df['low']) <= trail_price
-                    elif orderside == 'BUY':
-                        sl_price = sl_price + sl_trail_limit
-                        trail_price = trail_price + trail_limit
+                    if roundtick or self.market == 'MCX':
+                        trail_price = self.round_to_ticksize(trail_price, orderside, 'TARGET')
+
+                    for row in scrip_df.itertuples():
                         
-                        if roundtick or self.market == 'MCX':
-                            sl_price = self.round_to_ticksize(sl_price, orderside, 'STOPLOSS')
-                            trail_price = self.round_to_ticksize(trail_price, orderside, 'TARGET')
-
-                        mask_sl = (scrip_df['close'] if from_candle_close else scrip_df['low']) <= sl_price
-                        mask_trail = (scrip_df['close'] if from_candle_close else scrip_df['high']) >= trail_price
-
-                    mask_time = scrip_df['date_time'] >= trail_time
-
-                    combined_mask = (mask_sl | mask_trail) & mask_time
+                        if (from_candle_close and row.close <= sl_price) or (not from_candle_close and row.low <= sl_price):
+                            sl_flag = True
+                            exit_time = row.date_time
+                            exit_price = row.close if from_candle_close else sl_price
+                            break
+                        elif (from_candle_close and row.close >= trail_price) or (not from_candle_close and row.high >= trail_price):
+                            trail_flag = True
+                                
+                            sl_price = sl_price * (1 + (sl_trail/100))
+                            trail_price = trail_price * (1 + (trail/100))
+                            
+                            if roundtick or self.market == 'MCX':
+                                sl_price = self.round_to_ticksize(sl_price, orderside, 'STOPLOSS')
+                                trail_price = self.round_to_ticksize(trail_price, orderside, 'TARGET')
+                            
+                            if sl_price >= trail_price:
+                                sl_flag = True
+                                exit_time = row.date_time
+                                exit_price = row.close if from_candle_close else trail_price
+                                break
+                else:
+                    # trailing at every minute
+                    for row in scrip_df.itertuples():
+                        
+                        if (from_candle_close and row.close <= sl_price) or (not from_candle_close and row.low <= sl_price):
+                            sl_flag = True
+                            exit_time = row.date_time
+                            exit_price = row.close if from_candle_close else sl_price
+                            break
+                        else:
+                            sl_price = max(sl_price, ((100 - sl) / 100) * row.close) if from_candle_close else max(sl_price, ((100 - sl) / 100) * row.high)
+                            if roundtick or self.market == 'MCX':
+                                sl_price = self.round_to_ticksize(sl_price, orderside, 'STOPLOSS')
 
             exit_price = c if exit_price is None else exit_price
 
@@ -1023,7 +1055,7 @@ class IntradayBacktest:
 
                     if orderside == 'SELL':
                         sl_price_val = sl_price_val - sl_trail_limit if (sl or sl_price) else (ch + 1)
-                        intra_sl_price_val = intra_sl_price_val - sl_trail_limit if (intra_sl or intra_sl_price) else (h + 1) 
+                        intra_sl_price_val = intra_sl_price_val - sl_trail_limit if (intra_sl or intra_sl_price) else (h + 1)
                         trail_price = trail_price - trail_limit
 
                         if roundtick or self.market == 'MCX':
@@ -1034,7 +1066,7 @@ class IntradayBacktest:
                         mask_sl = scrip_df['close'] >= sl_price_val
                         mask_intra_sl = scrip_df['high'] >= intra_sl_price_val
                         mask_trail = scrip_df['close'] <= trail_price
-                    elif orderside == 'BUY':        
+                    elif orderside == 'BUY':
                         sl_price_val = sl_price_val + sl_trail_limit if (sl or sl_price) else (cl - 1)
                         intra_sl_price_val = intra_sl_price_val + sl_trail_limit if (intra_sl or intra_sl_price) else (l - 1)
                         trail_price = trail_price + trail_limit

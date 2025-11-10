@@ -52,7 +52,7 @@ def select_file_gui(title="Select a File", filetypes=None, initialdir=".") -> Pa
     root.destroy()
     return Path(file_path) if file_path else None
 
-def get_dte_csv_path(files_indices):
+def get_dte_csv_path():
     
     if sys.platform == "win32":
         base_dir = "P:"
@@ -64,23 +64,31 @@ def get_dte_csv_path(files_indices):
         dte_csv_path = select_file_gui(title="Select DTE CSV File", filetypes=[("CSV files", "*.csv")])
         return dte_csv_path
     
-    indices = NSE_INDICES + BSE_INDICES
-    if all(index in indices for index in files_indices):
-        dte_csv_path = f"{base_dir}/PICKLE/DTE.csv"
-        if os.path.exists(dte_csv_path):
+    pickle_paths = {
+        "1": f"{base_dir}/PICKLE",
+        "2": f"{base_dir}/MPICKLE",
+        "3": f"{base_dir}/MCXPICKLE",
+        "4": f"{base_dir}/USPICKLE",
+        "5": f"{base_dir}/MUSPICKLE",
+    }
+
+    print("\nChoose the DTE file directory:")
+    for key, value in pickle_paths.items():
+        print(f"  {key}: {Path(value).name}")
+    print("  6: Other (Select DTE file manually)")
+
+    choice = input("Enter your choice (1-6): ").strip()
+
+    if choice in pickle_paths:
+        dte_csv_path = Path(pickle_paths[choice]) / "DTE.csv"
+        if dte_csv_path.exists():
             return dte_csv_path
-    
-    indices = MCX_INDICES
-    if all(index in indices for index in files_indices):
-        dte_csv_path = f"{base_dir}/MCXPICKLE/DTE.csv"
-        if os.path.exists(dte_csv_path):
-            return dte_csv_path
-        
-    indices = US_INDICES
-    if all(index in indices for index in files_indices):
-        dte_csv_path = f"{base_dir}/USPICKLE/DTE.csv"
-        if os.path.exists(dte_csv_path):
-            return dte_csv_path
+        else:
+            print(f"DTE.csv not found in {pickle_paths[choice]}. Falling back to manual selection.")
+    elif choice == '6':
+        pass  # Proceed to manual selection
+    else:
+        print("Invalid choice. Falling back to manual selection.")
     
     print("\nSelect DTE CSV File: ")
     dte_csv_path = select_file_gui(title="Select DTE CSV File", filetypes=[("CSV files", "*.csv")])
@@ -157,7 +165,7 @@ if __name__ == "__main__":
         sys.exit(0)
         
     # select DTE CSV file
-    dte_csv_path = get_dte_csv_path(indices)
+    dte_csv_path = get_dte_csv_path()
     if dte_csv_path:
         print(f"\nDTE CSV Path: {dte_csv_path}")
         # Read DTE CSV file

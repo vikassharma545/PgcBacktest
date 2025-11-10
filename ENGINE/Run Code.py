@@ -93,6 +93,11 @@ def get_pickle_path(meta_data_path):
     try:
         meta_df = pd.read_csv(meta_data_path)
         meta_indices = set(meta_df['index'].unique())
+        
+        max_dte = -1
+        for col in meta_df.columns:
+            if 'dte' in col.lower():
+                max_dte = max(max_dte, meta_df[col].astype(float).max())
     except:
         print("Error getting Pickle Path")
         print("\nPlease select the Pickle folder: ")
@@ -101,8 +106,14 @@ def get_pickle_path(meta_data_path):
             return pickle_path
     
     indices = NSE_INDICES + BSE_INDICES
-    if all(index in indices for index in meta_indices):
+    if all(index in indices for index in meta_indices) and max_dte < 7:
         pickle_path = f"{base_dir}/PICKLE/"
+        if os.path.exists(pickle_path):
+            return pickle_path
+        
+    indices = NSE_INDICES + BSE_INDICES
+    if all(index in indices for index in meta_indices) and max_dte >= 7:
+        pickle_path = f"{base_dir}/MPICKLE/"
         if os.path.exists(pickle_path):
             return pickle_path
     
@@ -113,8 +124,14 @@ def get_pickle_path(meta_data_path):
             return pickle_path
         
     indices = US_INDICES
-    if all(index in indices for index in meta_indices):
+    if all(index in indices for index in meta_indices) and max_dte < 7:
         pickle_path = f"{base_dir}/USPICKLE/"
+        if os.path.exists(pickle_path):
+            return pickle_path
+        
+    indices = US_INDICES
+    if all(index in indices for index in meta_indices) and max_dte >= 7:
+        pickle_path = f"{base_dir}/MUSPICKLE/"
         if os.path.exists(pickle_path):
             return pickle_path
 

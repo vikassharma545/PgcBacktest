@@ -162,7 +162,7 @@ def get_parameter_data(code, parameter_path):
         parameter['method'] = parameter['method'].str.upper()
         
     
-    elif (code == 'B120_RE') or (code == 'B120_TTC_RE'):
+    elif (code == 'B120_RE') or (code == 'B120_TTC_RE') or (code == 'B120W_RE'):
         
         # filter - where sl = 0
         parameter.loc[parameter['sl'] == 0, 'ut_sl'] = 0
@@ -243,7 +243,7 @@ def get_parameter_data(code, parameter_path):
         parameter['method'] = parameter['method'].str.upper()
 
 
-    elif (code == 'DT') or (code == 'DT_SI') or (code == 'DT_RE') or (code =='DT_TRAIL') or (code == 'DTN') or (code == 'DTB_RE'):
+    elif (code == 'DT') or (code == 'DT_SI') or (code == 'DT_RE') or (code =='DT_TRAIL') or (code == 'DTN') or (code == 'DTB_RE') or (code == 'DTW'):
         # filter - where sl = 0
         parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
         
@@ -365,7 +365,7 @@ def get_parameter_data(code, parameter_path):
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
 
 
-    elif (code == 'RED') or (code == 'RED_SI'):
+    elif (code == 'RED') or (code == 'RED_SI') or (code == 'REDW'):
         # filter - where sl = 0
         parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
         

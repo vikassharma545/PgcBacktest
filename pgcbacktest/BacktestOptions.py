@@ -1184,7 +1184,7 @@ class WeeklyBacktest(IntradayBacktest):
         
         self.pickle_path, self.index, self.week_dates, self.from_dte, self.to_dte, self.meta_start_time, self.meta_end_time = pickle_path, index, week_dates, from_dte, to_dte, start_time, end_time
         
-        self.current_week_dates = sorted(set(([self.week_dates[0]] * (7 - len(self.week_dates)) + self.week_dates)[-from_dte : None if to_dte == 1 else -to_dte + 1]))
+        self.current_week_dates = sorted(set(([self.week_dates[0]] * (99 - len(self.week_dates)) + self.week_dates)[-from_dte : None if to_dte == 1 else -to_dte + 1]))
         self.__future_pickle_path, self.__option_pickle_path = self.get_future_option_path(index)
         self.future_data = pd.concat([pd.read_parquet(self.__future_pickle_path.format(date=current_date.date())) for current_date in self.current_week_dates])
         self.future_data.sort_values(by='date_time', inplace=True)

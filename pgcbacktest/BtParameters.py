@@ -47,15 +47,16 @@ def get_meta_data(code, meta_data_path):
     meta_row_nos = meta_row_nos or range(len(meta_data))
     return meta_data, meta_row_nos
 
-def get_meta_row_data(meta_row, pickle_path, weekly=False, monthly=False):
+def get_meta_row_data(meta_row, pickle_path, weekly=False):
     
     index, from_date, to_date, start_time, end_time = meta_row['index'], meta_row['from_date'], meta_row['to_date'], meta_row['start_time'], meta_row['end_time']
     dte_file = get_dte_file(pickle_path)
 
-    if not weekly and not monthly:
+    if not weekly:
         dte = int(meta_row['dte'])
-        date_lists = dte_file.loc[(dte_file.index >= from_date) & (dte_file.index <= to_date) & (dte_file[index] == dte)].index.to_list()    
+        date_lists = dte_file.loc[(dte_file.index >= from_date) & (dte_file.index <= to_date) & (dte_file[index] == dte)].index.to_list()
         return index, dte, from_date, to_date, start_time, end_time, date_lists
+    
     elif weekly:
         from_dte, to_dte = int(meta_row['from_dte']), int(meta_row['to_dte'])
         date_lists = dte_file.loc[(dte_file.index >= from_date) & (dte_file.index <= to_date) & (~dte_file[index].isna())].index.to_list()
@@ -78,38 +79,6 @@ def get_meta_row_data(meta_row, pickle_path, weekly=False, monthly=False):
             week_lists.append(week_dates)
 
         return index, from_dte, to_dte, from_date, to_date, start_time, end_time, week_lists
-
-    elif monthly:
-
-        from_dte, to_dte = int(meta_row['from_dte']), int(meta_row['to_dte'])
-        date_lists = dte_file.loc[(dte_file.index >= from_date) & (dte_file.index <= to_date)].index.to_list()
-
-        month_dates, month_lists = [], []
-        prev_month, current_month = date_lists[-1].month, date_lists[-1].month
-        check_dte = True
-
-        for date in reversed(date_lists):
-            dte = int(dte_file.loc[date, index])
-            current_month = date.month
-
-            if current_month != prev_month:
-                check_dte = True
-            
-            if check_dte and dte == 1:
-
-                if month_dates:
-                    month_lists.append(month_dates[::-1])
-
-                check_dte = False
-                month_dates = []
-                
-            month_dates.append(date)
-            prev_month = current_month
-
-        if month_dates:
-            month_lists.append(month_dates[::-1])
-
-        return index, from_dte, to_dte, from_date, to_date, start_time, end_time, month_lists
 
 def get_parameter_data(code, parameter_path):
     

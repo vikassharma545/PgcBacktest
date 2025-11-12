@@ -471,7 +471,7 @@ def get_parameter_data(code, parameter_path):
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
             
 
-    elif (code == 'SRE_SEPARATE_LEG_SL'):
+    elif (code == 'SRE_SEPARATE_LEG_SL') or (code == 'SREW_SEPARATE_LEG_SL'):
 
         parameter['orderside'] = parameter['orderside'].str.upper()
 

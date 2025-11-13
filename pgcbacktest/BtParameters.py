@@ -408,11 +408,13 @@ def get_parameter_data(code, parameter_path):
         parameter.loc[(parameter['sell_sl'] == 0), 'buy_track_original'] = False
         parameter.loc[(parameter['sell_sl'] == 0), 'sell2_flag'] = False
         
-        parameter = parameter[parameter['sell_trail'] >= parameter['sell_sl_trail']]
+        # parameter = parameter[parameter['sell_trail'] >= parameter['sell_sl_trail']]
+        parameter = parameter[parameter['sell_trail'] == parameter['sell_sl_trail']]
         parameter.loc[parameter['sell_sl_trail'] == 0, 'sell_trail'] = 0
         parameter.loc[parameter['sell_trail'] == 0, 'sell_sl_trail'] = parameter['sell_sl']
     
-        parameter = parameter[parameter['buy_trail'] >= parameter['buy_sl_trail']]
+        # parameter = parameter[parameter['buy_trail'] >= parameter['buy_sl_trail']]
+        parameter = parameter[parameter['buy_trail'] == parameter['buy_sl_trail']]
         parameter.loc[parameter['buy_sl_trail'] == 0, 'buy_trail'] = 0
         parameter.loc[parameter['buy_trail'] == 0, 'buy_sl_trail'] = parameter['buy_sl']       
                         

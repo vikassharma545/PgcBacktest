@@ -17,7 +17,6 @@ from tkinter import Tk, filedialog
 from pgcbacktest.BtParameters import *
 from pgcbacktest.BacktestOptions import *
 
-os.environ["POLARS_MAX_THREADS"] = str(max(1, round(os.cpu_count() * 0.7)))
 pl.enable_string_cache()
 
 def print_heading(title="🗂 Folder Selection & Configuration"):

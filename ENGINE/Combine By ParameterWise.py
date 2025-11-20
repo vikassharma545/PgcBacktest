@@ -12,7 +12,6 @@ import dask.dataframe as dd
 import pyarrow.parquet as pq
 from tkinter import Tk, filedialog
 
-os.environ["POLARS_MAX_THREADS"] = str(max(1, round(os.cpu_count() * 0.7)))
 pl.enable_string_cache()
 
 def print_heading(title="🗂 Folder Selection & Configuration"):

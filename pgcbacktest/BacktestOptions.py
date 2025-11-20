@@ -110,9 +110,29 @@ class IntradayBacktest:
         
         self.pickle_path, self.index, self.current_date, self.dte, self.meta_start_time, self.meta_end_time = pickle_path, index, current_date, dte, start_time, end_time
         self.__future_pickle_path, self.__option_pickle_path = self.get_future_option_path(index)
-        self.future_data = pd.read_parquet(self.__future_pickle_path.format(date=self.current_date.date())).set_index(['date_time'])
+
+        future_parquet_path = self.__future_pickle_path.format(date=self.current_date.date(), extn='parquet')
+        future_pickle_path = self.__future_pickle_path.format(date=self.current_date.date(), extn='pkl')
+
+        if os.path.exists(future_parquet_path):
+            self.future_data = pd.read_parquet(future_parquet_path).set_index(['date_time'])
+        elif os.path.exists(future_pickle_path):
+            self.future_data = pd.read_pickle(future_pickle_path).set_index(['date_time'])
+        else:
+            raise FileNotFoundError(f"Future data file not found for {self.index} on {self.current_date.date()}")
+            
         self.future_data = self.future_data[["open", "high", "low", "close"]]
-        self.options = pd.read_parquet(self.__option_pickle_path.format(date=self.current_date.date()))
+        
+        option_parquet_path = self.__option_pickle_path.format(date=self.current_date.date(), extn='parquet')
+        option_pickle_path = self.__option_pickle_path.format(date=self.current_date.date(), extn='pkl')
+        
+        if os.path.exists(option_parquet_path):
+            self.options = pd.read_parquet(option_parquet_path)
+        elif os.path.exists(option_pickle_path):
+            self.options = pd.read_pickle(option_pickle_path)
+        else:
+            raise FileNotFoundError(f"Option data file not found for {self.index} on {self.current_date.date()}")
+        
         self.options = self.options[["scrip", "date_time", "open", "high", "low", "close"]]
         self.options = self.options[(self.options['date_time'].dt.time >= self.meta_start_time) & (self.options['date_time'].dt.time <= self.meta_end_time)]
         self.options_data = self.options.set_index(['date_time', 'scrip'])
@@ -142,8 +162,8 @@ class IntradayBacktest:
 
     def get_future_option_path(self, index):
         index_lower = index.lower()
-        future_pickle_path = f'{self.pickle_path}{self.PREFIX.get(index_lower, index)} Future/{{date}}_{index_lower}_future.parquet'
-        option_pickle_path = f'{self.pickle_path}{self.PREFIX.get(index_lower, index)} Options/{{date}}_{index_lower}.parquet'
+        future_pickle_path = f'{self.pickle_path}{self.PREFIX.get(index_lower, index)} Future/{{date}}_{index_lower}_future.{{extn}}'
+        option_pickle_path = f'{self.pickle_path}{self.PREFIX.get(index_lower, index)} Options/{{date}}_{index_lower}.{{extn}}'
         return future_pickle_path, option_pickle_path
 
     def Cal_slipage(self, price):
@@ -1186,11 +1206,36 @@ class WeeklyBacktest(IntradayBacktest):
         
         self.current_week_dates = sorted(set(([self.week_dates[0]] * (99 - len(self.week_dates)) + self.week_dates)[-from_dte : None if to_dte == 1 else -to_dte + 1]))
         self.__future_pickle_path, self.__option_pickle_path = self.get_future_option_path(index)
-        self.future_data = pd.concat([pd.read_parquet(self.__future_pickle_path.format(date=current_date.date())) for current_date in self.current_week_dates])
+        
+        future_data_list = []
+        for current_date in self.current_week_dates:
+            future_parquet_path = self.__future_pickle_path.format(date=current_date.date(), extn='parquet')
+            future_pickle_path = self.__future_pickle_path.format(date=current_date.date(), extn='pkl')
+
+            if os.path.exists(future_parquet_path):
+                future_data_list.append(pd.read_parquet(future_parquet_path))
+            elif os.path.exists(future_pickle_path):
+                future_data_list.append(pd.read_pickle(future_pickle_path))
+
+        if not future_data_list:
+            raise FileNotFoundError(f"No future data files found for {self.index} for the given week.")
+        
+        self.future_data = pd.concat(future_data_list)
         self.future_data.sort_values(by='date_time', inplace=True)
         self.future_data.set_index('date_time', inplace=True)
         self.future_data = self.future_data[["open", "high", "low", "close"]]
-        self.options = pd.concat([pd.read_parquet(self.__option_pickle_path.format(date=current_date.date())) for current_date in self.current_week_dates])
+        
+        option_data_list = []
+        for current_date in self.current_week_dates:
+            option_parquet_path = self.__option_pickle_path.format(date=current_date.date(), extn='parquet')
+            option_pickle_path = self.__option_pickle_path.format(date=current_date.date(), extn='pkl')
+
+            if os.path.exists(option_parquet_path):
+                option_data_list.append(pd.read_parquet(option_parquet_path))
+            elif os.path.exists(option_pickle_path):
+                option_data_list.append(pd.read_pickle(option_pickle_path))
+        
+        self.options = pd.concat(option_data_list)
         self.options = self.options[(self.options['date_time'].dt.time >= start_time) & (self.options['date_time'].dt.time <= end_time)]
         self.options = self.options[["scrip", "date_time", "open", "high", "low", "close"]]
         self.options_data = self.options.set_index(['date_time', 'scrip'])
@@ -2118,22 +2163,3 @@ class WeeklyBacktest(IntradayBacktest):
         
     def __del__(self) -> None:
         print("Deleting instance ...")
-
-
-class MonthlyBacktest(WeeklyBacktest):
-
-    def __init__(self, pickle_path, index, month_dates, from_dte, to_dte, start_time, end_time):
-        
-        self.pickle_path, self.index, self.month_dates, self.from_dte, self.to_dte = pickle_path, index, month_dates, from_dte, to_dte
-        
-        self.current_month_dates = sorted(set(([self.month_dates[0]] * (31 - len(self.month_dates)) + self.month_dates)[-from_dte : None if to_dte == 1 else -to_dte + 1]))
-        self.__future_pickle_path, self.__option_pickle_path = self.get_future_option_path(index)
-        self.future_data = pd.concat([pd.read_parquet(self.__future_pickle_path.format(date=current_date.date())) for current_date in self.current_month_dates])
-        self.future_data.sort_values(by='date_time', inplace=True)
-        self.future_data.set_index('date_time', inplace=True)
-
-        self.options = pd.concat([pd.read_parquet(self.__option_pickle_path.format(date=current_date.date())) for current_date in self.current_month_dates])
-        self.options = self.options[(self.options['date_time'].dt.time >= start_time) & (self.options['date_time'].dt.time <= end_time)]
-        self.options_data = self.options.set_index(['date_time', 'scrip'])
-        self.gap = self.get_gap()
-

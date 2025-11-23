@@ -175,30 +175,6 @@ if __name__ == "__main__":
         input("Press Enter to Exit...")
         sys.exit(0)
     
-    use_polars = get_bool_input("\nUse Polars (fastest) instead of Pandas/Dask?")
-
-    ### checking parquet files
-    print("\nChecking Parquet Files...")
-    with concurrent.futures.ThreadPoolExecutor(max_workers=7) as executor:
-        results = list(tqdm(executor.map(check_parquet_file, parquet_files), total=len(parquet_files), desc="Checking Parquet Files"))
-
-    errors = [r for r in results if r]
-    error_files = [parquet_files[i] for i, r in enumerate(results) if r]
-
-    if errors:
-        for err in errors:
-            print(err)
-        if input("Delete all error files? (y/n): ").strip().lower() == 'y':
-            for f in error_files:
-                try:
-                    os.remove(f)
-                    print(f"Deleted: {f}")
-                except Exception as e:
-                    print(f"Failed to delete {f}: {e}")
-        input("Press Enter to Exit !!!")
-        sys.exit(0)
-    print("All Parquet files are valid.\n")
-    
     if input("Proceed with execution? (y/n): ").strip().lower() != 'y':
         print('❌ Execution cancelled.')
         sleep(2)
@@ -211,7 +187,7 @@ if __name__ == "__main__":
     shutil.rmtree(dashboard_folder_path, ignore_errors=True)
     os.makedirs(dashboard_folder_path, exist_ok=True)
     year_day_dte_files = get_year_day_dte_files(parquet_files)
-
+    
     print('\nBuilding DashBoard Files... \n')
     for index in indices:
         try:
@@ -228,57 +204,41 @@ if __name__ == "__main__":
                     print(index, year, day, dte, chunk)
                     chunks_file = [f for f in year_day_dte_files[key] if f.stem.split()[-1] == chunk]
 
-                    if use_polars:
-                        def read_and_cast(path):
-                            df = pl.read_parquet(path, columns = (name_columns+pnl_columns))
-                            return df.with_columns([pl.col(name_columns).cast(pl.Utf8).cast(pl.Categorical), pl.col(pnl_columns) .cast(pl.Float64)])
+                    def read_and_cast(path):
+                        df = pl.read_parquet(path, columns = (name_columns+pnl_columns))
+                        return df.with_columns([pl.col(name_columns).cast(pl.Utf8).cast(pl.Categorical), pl.col(pnl_columns) .cast(pl.Float64)])
 
-                        with concurrent.futures.ThreadPoolExecutor(max_workers=7) as exe:
-                            dfs = list(exe.map(read_and_cast, chunks_file))
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=7) as exe:
+                        dfs = list(exe.map(read_and_cast, chunks_file))
 
-                        data = pl.concat(dfs)
-                        data = data.group_by(name_columns).agg([pl.col(col).sum() for col in pnl_columns])
-                        data = data.unpivot(index=name_columns, on=pnl_columns, variable_name='PL Basis', value_name='Points')
-                        data.columns = [c.replace('P_','') for c in data.columns]
+                    data = pl.concat(dfs)
+                    data = data.group_by(name_columns).agg([pl.col(col).sum() for col in pnl_columns])
+                    data = data.unpivot(index=name_columns, on=pnl_columns, variable_name='PL Basis', value_name='Points')
+                    data.columns = [c.replace('P_','') for c in data.columns]
                     
-                        data = data.with_columns([
-                            pl.col("PL Basis").cast(pl.Categorical).alias("PL Basis")
-                        ])
+                    data = data.with_columns([
+                        pl.col("PL Basis").cast(pl.Categorical).alias("PL Basis")
+                    ])
 
-                        data = data.with_columns([
-                            pl.lit(int(year)).cast(pl.Int16).alias("Year"),
-                            pl.lit(day).cast(pl.Categorical).alias("Day"),
-                            pl.lit(int(float(dte))).cast(pl.Int8).alias("DTE")
-                        ])
-                    else:
-                        data = dd.read_parquet(chunks_file, columns=(name_columns+pnl_columns))
-                        data = data.compute()
-                        data = data.groupby(name_columns).sum(numeric_only=True)[pnl_columns].reset_index()
-                        data = data.melt(id_vars=name_columns, value_vars=pnl_columns, var_name='PL Basis', value_name='Points')
-                        data.columns = [c.replace('P_','') for c in data.columns]
-                        data[['Year', 'Day', 'DTE']] = np.int16(year), day, np.int8(float(dte))
-                        
+                    data = data.with_columns([
+                        pl.lit(int(year)).cast(pl.Int16).alias("Year"),
+                        pl.lit(day).cast(pl.Categorical).alias("Day"),
+                        pl.lit(int(float(dte))).cast(pl.Int8).alias("DTE")
+                    ])
+                    
                     dashboard_data_list.append(data)
+                    
+                if not dashboard_data_list:
+                    continue
 
-                if use_polars:
-                    dashboard_data = pl.concat(dashboard_data_list, how="vertical")
+                dashboard_data = pl.concat(dashboard_data_list, how="vertical")  
 
-                    for pnl_col in pnl_columns:
-                        pnl_data = dashboard_data.filter(pl.col("PL Basis") == pnl_col)
-                        chunk_size = max_row
-                        for idx, i in enumerate(range(0, len(pnl_data), chunk_size), start=1):
-                            chunk_data = pnl_data.slice(i, chunk_size)
-                            chunk_data.write_csv(f"{dashboard_folder_path}/{index}/{code}-{year}-{day}-{dte}-{pnl_col}-No-{idx}.csv")
-                else:
-                    dashboard_data = pd.concat(dashboard_data_list, ignore_index=True)
-                    dashboard_data[dashboard_data.select_dtypes(include=['object']).columns] = dashboard_data.select_dtypes(include=['object']).astype('category')
-
-                    for pnl_col in pnl_columns:
-                        pnl_data = dashboard_data[dashboard_data['PL Basis'] == pnl_col]
-                        chunk_size = max_row
-                        for idx, i in enumerate(range(0, len(pnl_data), chunk_size), start=1):
-                            chunk_data = pnl_data.iloc[i:i + chunk_size]
-                            chunk_data.to_csv(f"{dashboard_folder_path}/{index}/{code}-{year}-{day}-{dte}-{pnl_col}-No-{idx}.csv", index=False)
+                for pnl_col in pnl_columns:
+                    pnl_data = dashboard_data.filter(pl.col("PL Basis") == pnl_col)
+                    chunk_size = max_row
+                    for idx, i in enumerate(range(0, len(pnl_data), chunk_size), start=1):
+                        chunk_data = pnl_data.slice(i, chunk_size)
+                        chunk_data.write_parquet(f"{dashboard_folder_path}/{index}/{code}-{year}-{day}-{dte}-{pnl_col}-No-{idx}.parquet")
 
                 del dashboard_data
                 del dashboard_data_list
@@ -287,6 +247,6 @@ if __name__ == "__main__":
 
         except Exception as e:
             input(f"ERROR !!! {e}")
-        
+    
     print("Done\n")
     input("Press Enter to Exit !!!")

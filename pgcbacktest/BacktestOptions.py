@@ -336,7 +336,7 @@ class IntradayBacktest:
                 ce_price, pe_price = self.options_data.loc[(current_dt, ce_scrip), 'close'], self.options_data.loc[(current_dt, pe_scrip), 'close']
                 
                 if get_strike(ce_scrip) < get_strike(pe_scrip) and check_inverted:
-                    return self.get_straddle_strike(current_dt)
+                    return self.get_straddle_strike(current_dt, end_dt)
                 else:
                     return ce_scrip, pe_scrip, ce_price, pe_price, future_price, current_dt
             except (IndexError, KeyError, ValueError, TypeError):
@@ -1441,7 +1441,7 @@ class WeeklyBacktest(IntradayBacktest):
                 ce_price, pe_price = self.options_data.loc[(current_dt, ce_scrip), 'close'], self.options_data.loc[(current_dt, pe_scrip), 'close']
                 
                 if get_strike(ce_scrip) < get_strike(pe_scrip) and check_inverted:
-                    return self.get_straddle_strike(current_dt)
+                    return self.get_straddle_strike(current_dt, end_dt)
                 else:
                     return ce_scrip, pe_scrip, ce_price, pe_price, future_price, current_dt
             except (IndexError, KeyError, ValueError, TypeError):

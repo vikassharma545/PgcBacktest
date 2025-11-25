@@ -2,6 +2,7 @@ import os
 import gc
 import sys
 import shutil
+import pickle
 import datetime
 import numpy as np
 import polars as pl
@@ -188,6 +189,7 @@ if __name__ == "__main__":
     os.makedirs(dashboard_folder_path, exist_ok=True)
     year_day_dte_files = get_year_day_dte_files(parquet_files)
     
+    meta_data = {}
     print('\nBuilding DashBoard Files... \n')
     for index in indices:
         try:
@@ -206,7 +208,7 @@ if __name__ == "__main__":
 
                     def read_and_cast(path):
                         df = pl.read_parquet(path, columns = (name_columns+pnl_columns))
-                        return df.with_columns([pl.col(name_columns).cast(pl.Utf8).cast(pl.Categorical), pl.col(pnl_columns) .cast(pl.Float64)])
+                        return df.with_columns([pl.col(name_columns).cast(pl.Utf8).cast(pl.Categorical), pl.col(pnl_columns).cast(pl.Float64)])
 
                     with concurrent.futures.ThreadPoolExecutor(max_workers=7) as exe:
                         dfs = list(exe.map(read_and_cast, chunks_file))
@@ -214,7 +216,7 @@ if __name__ == "__main__":
                     data = pl.concat(dfs)
                     data = data.group_by(name_columns).agg([pl.col(col).sum() for col in pnl_columns])
                     data = data.unpivot(index=name_columns, on=pnl_columns, variable_name='PL Basis', value_name='Points')
-                    data.columns = [c.replace('P_','') for c in data.columns]
+                    data.columns = [c.replace('P_','', 1) if c.startswith('P_') else c for c in data.columns]
                     
                     data = data.with_columns([
                         pl.col("PL Basis").cast(pl.Categorical).alias("PL Basis")
@@ -231,7 +233,12 @@ if __name__ == "__main__":
                 if not dashboard_data_list:
                     continue
 
-                dashboard_data = pl.concat(dashboard_data_list, how="vertical")  
+                dashboard_data = pl.concat(dashboard_data_list, how="vertical")
+                
+                # storing unique values of column of dtype Categorical, Int16, Int8
+                for col in dashboard_data.columns:
+                    if dashboard_data[col].dtype in [pl.Categorical, pl.Int16, pl.Int8]:
+                        meta_data[col] = meta_data.get(col, set()).union(set(dashboard_data[col].unique().to_list()))
 
                 for pnl_col in pnl_columns:
                     pnl_data = dashboard_data.filter(pl.col("PL Basis") == pnl_col)
@@ -247,6 +254,45 @@ if __name__ == "__main__":
 
         except Exception as e:
             input(f"ERROR !!! {e}")
+            
+    print("\nDashBoard Files Created Successfully !!!")
+    
+    # saving meta data
+    meta_data_path = dashboard_folder_path / f"MetaData.pickle"
+    with open(meta_data_path, 'wb') as f:
+        pickle.dump(meta_data, f)
+    print(f"\nMeta Data Saved at: {meta_data_path}")
+    
+    # # Validating and cleaning Parquet files
+    # # if metadata unique value count is one, then remove that column from all parquet files
+    # columns_to_remove = set([col for col, values in meta_data.items() if len(values) == 1])
+    # columns_to_remove.update(("Index", "Year", "Day", "DTE", "PL Basis"))
+    
+    # def validate_parquet_file(file):
+    #     try:
+    #         df = pl.read_parquet(file)
+    #         col_to_delete = [c for c in columns_to_remove if c in df.columns]
+    #         if col_to_delete:
+    #             df = df.drop(col_to_delete)
+    #             df.write_parquet(file)
+                
+    #         return None
+    #     except Exception as e:
+    #         return (file, str(e))
+    
+    # print("\nValidating DashBoard Parquet Files...")
+    # dashboard_parquet_files = get_parquet_files(dashboard_folder_path)
+    
+    # with concurrent.futures.ThreadPoolExecutor() as executor:
+    #     # Use tqdm to show progress over the futures as they complete
+    #     results = list(tqdm(executor.map(validate_parquet_file, dashboard_parquet_files), total=len(dashboard_parquet_files)))
+
+    # invalid_files = [result for result in results if result is not None]
+
+    # if invalid_files:
+    #     print("\nFound invalid files during validation:")
+    #     for file, error in invalid_files:
+    #         print(f"  - {file}: {error}")
     
     print("Done\n")
     input("Press Enter to Exit !!!")

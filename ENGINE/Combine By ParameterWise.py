@@ -1,6 +1,6 @@
 import os
-import gc
 import sys
+import time
 import shutil
 import polars as pl
 import pandas as pd
@@ -61,7 +61,8 @@ def get_code_index_cols(parquet_files):
     df = pd.read_parquet(max(parquet_files, key=lambda f: os.path.getsize(f)))
     name_columns = [c for c in list(df.columns) if c.startswith('P_')]
     pnl_columns = [c for c in list(df.columns) if c.endswith('PNL')]
-    return code, indices, name_columns, pnl_columns
+    others_columns = [c for c in list(df.columns) if c not in name_columns + pnl_columns]
+    return code, indices, name_columns, pnl_columns, others_columns
 
 def check_parquet_file(file):
     try:
@@ -87,7 +88,7 @@ if __name__ == "__main__":
         parquet_files = get_parquet_files(parquet_files_folder_path)
         
         if parquet_files:
-            code, indices, name_columns, pnl_columns = get_code_index_cols(parquet_files)
+            code, indices, name_columns, pnl_columns, others_columns = get_code_index_cols(parquet_files)
             print()
             print(f"Total File Uploaded :- {len(parquet_files)}")
             print(f"Code :- {code}")
@@ -109,7 +110,7 @@ if __name__ == "__main__":
     
     ### checking parquet files
     print("\nChecking Parquet Files...")
-    with concurrent.futures.ThreadPoolExecutor(max_workers=7) as executor:
+    with concurrent.futures.ThreadPoolExecutor() as executor:
         results = list(tqdm(executor.map(check_parquet_file, parquet_files), total=len(parquet_files), desc="Checking Parquet Files"))
 
     errors = [r for r in results if r]
@@ -139,6 +140,8 @@ if __name__ == "__main__":
 
     shutil.rmtree(combine_folder_path, ignore_errors=True)
     os.makedirs(combine_folder_path, exist_ok=True)
+    
+    t1 = time.time()
 
     print('\nBuilding ParameterWise Files... \n')
     for index in indices:
@@ -155,10 +158,30 @@ if __name__ == "__main__":
 
                 print('Reading Chunks...')
                 if use_polars:
-                    df = pl.read_parquet(chunks_file, columns=(name_columns+pnl_columns) if only_mtm_col else None, use_pyarrow=True)
+                    
+                    def read_and_cast(path):
+                        df = pl.read_parquet(path, columns=(name_columns + pnl_columns) if only_mtm_col else None)
+                        
+                        if only_mtm_col:
+                            return df.with_columns([
+                                pl.col(name_columns).cast(pl.Utf8).cast(pl.Categorical),
+                                pl.col(pnl_columns).cast(pl.Float64),
+                            ])
+                        else:
+                            return df.with_columns([
+                                pl.col(name_columns).cast(pl.Utf8).cast(pl.Categorical),
+                                pl.col(pnl_columns).cast(pl.Float64),
+                                pl.col(others_columns).cast(pl.Utf8)
+                            ])
+
+                    with concurrent.futures.ThreadPoolExecutor() as exe:
+                        dfs = list(exe.map(read_and_cast, chunks_file))
+                
+                    df = pl.concat(dfs)                    
                 else:
                     df = dd.read_parquet(chunks_file, columns=(name_columns+pnl_columns) if only_mtm_col else None)
                     df = df.compute()
+                    
                 print('Reading Complete...')
 
                 os.makedirs(f"{combine_folder_path}/{index}", exist_ok=True)
@@ -180,16 +203,16 @@ if __name__ == "__main__":
                         print(e)
 
                 print(f"🧩 {index} - Chunk {chunk_no}: Saving grouped files...")
-                with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count()*7) as executor:
+                with concurrent.futures.ThreadPoolExecutor() as executor:
                     for idx, data in grouped:
                         executor.submit(save_file, idx, data)
-                        
-                del df, grouped
-                sleep(1)
-                gc.collect()
                 
             except Exception as e:
                 input(f"ERROR !!! {e}")
                 
     print("Done\n")
+    t2 = time.time()
+    minutes, seconds = divmod(t2 - t1, 60)
+    print(f"\nTotal Time Taken: {int(minutes)} minutes and {round(seconds, 2)} seconds.\n")
     input("Press Enter to Exit !!!")
+    

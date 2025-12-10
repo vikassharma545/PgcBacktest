@@ -1,6 +1,6 @@
 import os
-import gc
 import sys
+import time
 import shutil
 import datetime
 import numpy as np
@@ -178,7 +178,7 @@ if __name__ == "__main__":
 
     ### checking parquet files
     print("\nChecking Parquet Files...")
-    with concurrent.futures.ThreadPoolExecutor(max_workers=7) as executor:
+    with concurrent.futures.ThreadPoolExecutor() as executor:
         results = list(tqdm(executor.map(check_parquet_file, parquet_files), total=len(parquet_files), desc="Checking Parquet Files"))
 
     errors = [r for r in results if r]
@@ -210,6 +210,8 @@ if __name__ == "__main__":
     shutil.rmtree(dashboard_folder_path, ignore_errors=True)
     os.makedirs(dashboard_folder_path, exist_ok=True)
     year_dte_files = get_year_dte_files(parquet_files)
+    
+    t1 = time.time()
 
     print('\nBuilding DashBoard Files... \n')
     for index in indices:
@@ -232,7 +234,7 @@ if __name__ == "__main__":
                             df = pl.read_parquet(path, columns = (name_columns+pnl_columns))
                             return df.with_columns([pl.col(name_columns).cast(pl.Utf8).cast(pl.Categorical), pl.col(pnl_columns) .cast(pl.Float64)])
 
-                        with concurrent.futures.ThreadPoolExecutor(max_workers=7) as exe:
+                        with concurrent.futures.ThreadPoolExecutor() as exe:
                             dfs = list(exe.map(read_and_cast, chunks_file))
 
                         data = pl.concat(dfs)
@@ -278,13 +280,12 @@ if __name__ == "__main__":
                             chunk_data = pnl_data.iloc[i:i + chunk_size]
                             chunk_data.to_csv(f"{dashboard_folder_path}/{index}/{code}-{year}-{dte}-{pnl_col}-No-{idx}.csv", index=False)
 
-                del dashboard_data
-                del dashboard_data_list
-                sleep(1)
-                gc.collect()
-
         except Exception as e:
             input(f"ERROR !!! {e}")
             
     print("Done\n")
+    t2 = time.time()
+    minutes, seconds = divmod(t2 - t1, 60)
+    print(f"\nTotal Time Taken: {int(minutes)} minutes and {round(seconds, 2)} seconds.\n")
     input("Press Enter to Exit !!!")
+    

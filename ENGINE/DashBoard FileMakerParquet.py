@@ -1,6 +1,6 @@
 import os
-import gc
 import sys
+import time
 import shutil
 import pickle
 import datetime
@@ -189,6 +189,8 @@ if __name__ == "__main__":
     os.makedirs(dashboard_folder_path, exist_ok=True)
     year_day_dte_files = get_year_day_dte_files(parquet_files)
     
+    t1 = time.time()
+    
     meta_data = {}
     print('\nBuilding DashBoard Files... \n')
     for index in indices:
@@ -210,7 +212,7 @@ if __name__ == "__main__":
                         df = pl.read_parquet(path, columns = (name_columns+pnl_columns))
                         return df.with_columns([pl.col(name_columns).cast(pl.Utf8).cast(pl.Categorical), pl.col(pnl_columns).cast(pl.Float64)])
 
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=7) as exe:
+                    with concurrent.futures.ThreadPoolExecutor() as exe:
                         dfs = list(exe.map(read_and_cast, chunks_file))
 
                     data = pl.concat(dfs)
@@ -247,11 +249,6 @@ if __name__ == "__main__":
                         chunk_data = pnl_data.slice(i, chunk_size)
                         chunk_data.write_parquet(f"{dashboard_folder_path}/{index}/{code}-{year}-{day}-{dte}-{pnl_col}-No-{idx}.parquet")
 
-                del dashboard_data
-                del dashboard_data_list
-                sleep(1)
-                gc.collect()
-
         except Exception as e:
             input(f"ERROR !!! {e}")
             
@@ -263,36 +260,8 @@ if __name__ == "__main__":
         pickle.dump(meta_data, f)
     print(f"\nMeta Data Saved at: {meta_data_path}")
     
-    # # Validating and cleaning Parquet files
-    # # if metadata unique value count is one, then remove that column from all parquet files
-    # columns_to_remove = set([col for col, values in meta_data.items() if len(values) == 1])
-    # columns_to_remove.update(("Index", "Year", "Day", "DTE", "PL Basis"))
-    
-    # def validate_parquet_file(file):
-    #     try:
-    #         df = pl.read_parquet(file)
-    #         col_to_delete = [c for c in columns_to_remove if c in df.columns]
-    #         if col_to_delete:
-    #             df = df.drop(col_to_delete)
-    #             df.write_parquet(file)
-                
-    #         return None
-    #     except Exception as e:
-    #         return (file, str(e))
-    
-    # print("\nValidating DashBoard Parquet Files...")
-    # dashboard_parquet_files = get_parquet_files(dashboard_folder_path)
-    
-    # with concurrent.futures.ThreadPoolExecutor() as executor:
-    #     # Use tqdm to show progress over the futures as they complete
-    #     results = list(tqdm(executor.map(validate_parquet_file, dashboard_parquet_files), total=len(dashboard_parquet_files)))
-
-    # invalid_files = [result for result in results if result is not None]
-
-    # if invalid_files:
-    #     print("\nFound invalid files during validation:")
-    #     for file, error in invalid_files:
-    #         print(f"  - {file}: {error}")
-    
     print("Done\n")
+    t2 = time.time()
+    minutes, seconds = divmod(t2 - t1, 60)
+    print(f"\nTotal Time Taken: {int(minutes)} minutes and {round(seconds, 2)} seconds.\n")
     input("Press Enter to Exit !!!")

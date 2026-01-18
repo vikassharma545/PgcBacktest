@@ -54,7 +54,7 @@ def select_file_gui(title="Select a File", filetypes=None, initialdir=".") -> Pa
 def get_dte_csv_path():
     
     if sys.platform == "win32":
-        base_dir = "P:"
+        base_dir = "P:/PGC Data"
     elif sys.platform == "linux":
         base_dir = os.environ['HOME'] # "/home/user"
     else:
@@ -163,16 +163,16 @@ if __name__ == "__main__":
         input("Press Enter to Exit !!!")
         sys.exit(0)
         
-    # select DTE CSV file
-    dte_csv_path = get_dte_csv_path()
-    if dte_csv_path:
-        print(f"\nDTE CSV Path: {dte_csv_path}")
-        # Read DTE CSV file
-        dte_file = pd.read_csv(dte_csv_path, parse_dates=['Date'], dayfirst=True).set_index("Date")
-    else:
-        print("No DTE CSV file selected. :(")
-        input("Press Enter to Exit...")
-        sys.exit(0)
+    # # select DTE CSV file
+    # dte_csv_path = get_dte_csv_path()
+    # if dte_csv_path:
+    #     print(f"\nDTE CSV Path: {dte_csv_path}")
+    #     # Read DTE CSV file
+    #     dte_file = pd.read_csv(dte_csv_path, parse_dates=['Date'], dayfirst=True).set_index("Date")
+    # else:
+    #     print("No DTE CSV file selected. :(")
+    #     input("Press Enter to Exit...")
+    #     sys.exit(0)
     
     use_polars = get_bool_input("\nUse Polars (fastest) instead of Pandas/Dask?")
 

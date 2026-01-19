@@ -245,7 +245,7 @@ with open("{dir_pickle_path}", 'rb') as file:
     
     pattern = re.compile(r"^(?P<indent>\s*)if\s+not\s+is_file_exists\s*\(\s*output_csv_path\s*,\s*file_name\s*,\s*parameter_len\s*\)\s*:\s*$")
     for line in fileinput.input(run_scrip_path, inplace=True):
-        new_line = pattern.sub(lambda m: f"{m.group('indent')}if not is_file_exists(output_csv_path, file_name, parameter_len, dir_files=dir_files):", line)
+        new_line = pattern.sub(lambda m: f"{m.group('indent')}if not is_file_exists(output_csv_path, file_name, parameter_len, dir_files=dir_files, include_rar=True):", line)
         print(new_line, end="")
 
 def get_file_details(meta_data, pickle_path, notebook_path, output_csv_path, code, parameter_len, is_weekly, is_remote):
@@ -268,7 +268,7 @@ def get_file_details(meta_data, pickle_path, notebook_path, output_csv_path, cod
                 index, dte, _, _, _, _, date_lists = get_meta_row_data(meta_row, pickle_path)
                 total_dates += len(date_lists)
                 index_dates[index] = index_dates.get(index, 0) + len(date_lists)
-                files_dates = [current_date.date() for current_date in date_lists if not is_file_exists(output_csv_path, f"{index} {current_date.date()} {code}", parameter_len, dir_files)]
+                files_dates = [current_date.date() for current_date in date_lists if not is_file_exists(output_csv_path, f"{index} {current_date.date()} {code}", parameter_len, dir_files, include_rar=True)]
 
                 if files_dates:
                     total_pending_dates += len(files_dates)
@@ -278,7 +278,7 @@ def get_file_details(meta_data, pickle_path, notebook_path, output_csv_path, cod
                 index, from_dte, to_dte, _, _, _, _, week_lists = get_meta_row_data(meta_row, pickle_path, weekly=True)
                 total_dates += len(week_lists)
                 index_dates[index] = index_dates.get(index, 0) + len(week_lists)
-                files_dates = [week_dates for week_dates in week_lists if not is_file_exists(output_csv_path, f"{index} {week_dates[0].date()} {week_dates[-1].date()} {from_dte}-{to_dte} {code}", parameter_len, dir_files)]
+                files_dates = [week_dates for week_dates in week_lists if not is_file_exists(output_csv_path, f"{index} {week_dates[0].date()} {week_dates[-1].date()} {from_dte}-{to_dte} {code}", parameter_len, dir_files, include_rar=True)]
 
                 if files_dates:
                     total_pending_dates += len(files_dates)
@@ -563,10 +563,10 @@ if __name__ == "__main__":
                     
                     if not is_weekly:
                         index, dte, _, _, _, _, date_lists = get_meta_row_data(meta_row, pickle_path)
-                        pending_files = [current_date.date() for current_date in date_lists if not is_file_exists(output_csv_path, f"{index} {current_date.date()} {code}", parameter_len, dir_files)]
+                        pending_files = [current_date.date() for current_date in date_lists if not is_file_exists(output_csv_path, f"{index} {current_date.date()} {code}", parameter_len, dir_files, include_rar=True)]
                     else:
                         index, from_dte, to_dte, _, _, _, _, week_lists = get_meta_row_data(meta_row, pickle_path, weekly=True)
-                        pending_files = [week_dates for week_dates in week_lists if not is_file_exists(output_csv_path, f"{index} {week_dates[0].date()} {week_dates[-1].date()} {from_dte}-{to_dte} {code}", parameter_len, dir_files)]
+                        pending_files = [week_dates for week_dates in week_lists if not is_file_exists(output_csv_path, f"{index} {week_dates[0].date()} {week_dates[-1].date()} {from_dte}-{to_dte} {code}", parameter_len, dir_files, include_rar=True)]
 
                     if pending_files and os.path.exists(output_dir_path):
 

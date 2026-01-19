@@ -2,9 +2,11 @@ import os
 import gc
 import math
 import time
+import rarfile
 import datetime
 import requests
 import traceback
+import subprocess
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -54,9 +56,16 @@ def get_strike(scrip):
     return strike
 
 chunk_size = 100_000
-def is_file_exists(output_csv_path, file_name, parameter_size, dir_files=None, cache=False):
+def is_file_exists(output_csv_path, file_name, parameter_size, dir_files=None, cache=False, include_rar=False):
     
     total_chunks = (parameter_size - 1) // chunk_size + 1
+    
+    if include_rar:
+        output_dir_name = os.path.dirname(output_csv_path)
+        if os.path.exists(f"{output_dir_name}.rar"):
+            rar_files = [f.filename.split("/")[-1] for f in rarfile.RarFile(f"{output_dir_name}.rar").infolist() if f.filename.endswith(".parquet")]
+        else:
+            rar_files = []
 
     if cache:
         if not hasattr(is_file_exists, '_cached_dir_files'):
@@ -66,11 +75,11 @@ def is_file_exists(output_csv_path, file_name, parameter_size, dir_files=None, c
             dir_files = is_file_exists._cached_dir_files if dir_files is None else dir_files
 
     if dir_files is None:
-        return all(os.path.exists(f"{output_csv_path}{file_name} No-{idx}.parquet") for idx in range(1, total_chunks + 1))
+        return all(os.path.exists(f"{output_csv_path}{file_name} No-{idx}.parquet") or (include_rar and f"{file_name} No-{idx}.parquet" in rar_files) for idx in range(1, total_chunks + 1))
     else:
-        return all(f"{file_name} No-{idx}.parquet" in dir_files for idx in range(1, total_chunks + 1))
+        return all(f"{file_name} No-{idx}.parquet" in dir_files or (include_rar and f"{file_name} No-{idx}.parquet" in rar_files) for idx in range(1, total_chunks + 1))
 
-def save_chunk_data(chunk, log_cols, chunk_file_name):
+def save_chunk_data(chunk, log_cols, chunk_file_name, save_in_rar=False):
     chunk = [d for d in chunk if d is not None]
     log_data_chunk = pd.DataFrame(chunk, columns=log_cols)
     log_data_chunk.replace('', np.nan, inplace=True)
@@ -82,6 +91,15 @@ def save_chunk_data(chunk, log_cols, chunk_file_name):
                 raise FileNotFoundError(f"Directory {dir_path} not available")
 
             log_data_chunk.to_parquet(chunk_file_name, index=False)
+            
+            if save_in_rar:
+                rar_exe = r"C:\Program Files\WinRAR\rar.exe"
+                rar_file_path = f"{dir_path}.rar"
+
+                subprocess.run([rar_exe, "a", rar_file_path, chunk_file_name])
+                
+                if os.path.exists(chunk_file_name):
+                    os.remove(chunk_file_name)
             return
         except Exception as e:
             print(f"Save failed ({e}), retrying in {5}s...")

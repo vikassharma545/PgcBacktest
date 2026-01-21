@@ -5,6 +5,7 @@ import time
 import rarfile
 import datetime
 import requests
+import tempfile
 import traceback
 import subprocess
 import numpy as np
@@ -12,6 +13,7 @@ import pandas as pd
 from tqdm import tqdm
 from time import sleep
 import concurrent.futures
+from filelock import FileLock
 from functools import lru_cache
 pd.set_option('future.no_silent_downcasting', True)
 
@@ -57,15 +59,23 @@ def get_strike(scrip):
 
 chunk_size = 100_000
 def is_file_exists(output_csv_path, file_name, parameter_size, dir_files=None, cache=False, include_rar=False):
-    
     total_chunks = (parameter_size - 1) // chunk_size + 1
     
+    rar_files = set()
     if include_rar:
         output_dir_name = os.path.dirname(output_csv_path)
-        if os.path.exists(f"{output_dir_name}.rar"):
-            rar_files = [f.filename.split("/")[-1] for f in rarfile.RarFile(f"{output_dir_name}.rar").infolist() if f.filename.endswith(".parquet")]
-        else:
-            rar_files = []
+        rar_path = f"{output_dir_name}.rar"
+        lock_path = f"{rar_path}.lock"
+
+        if os.path.exists(rar_path):
+            with FileLock(lock_path):
+                while True:
+                    try:
+                        rar_files = set([f.filename.split("/")[-1] for f in rarfile.RarFile(rar_path).infolist() if f.filename.endswith(".parquet")])
+                        break
+                    except Exception as e:
+                        print(f"RAR read failed ({e}), retrying in 5s...")
+                        time.sleep(5)
 
     if cache:
         if not hasattr(is_file_exists, '_cached_dir_files'):
@@ -73,6 +83,9 @@ def is_file_exists(output_csv_path, file_name, parameter_size, dir_files=None, c
             dir_files = is_file_exists._cached_dir_files
         else:
             dir_files = is_file_exists._cached_dir_files if dir_files is None else dir_files
+
+    if dir_files is not None and not isinstance(dir_files, set):
+        dir_files = set(dir_files)
 
     if dir_files is None:
         return all(os.path.exists(f"{output_csv_path}{file_name} No-{idx}.parquet") or (include_rar and f"{file_name} No-{idx}.parquet" in rar_files) for idx in range(1, total_chunks + 1))
@@ -95,14 +108,17 @@ def save_chunk_data(chunk, log_cols, chunk_file_name, save_in_rar=False):
             if save_in_rar:
                 rar_exe = r"C:\Program Files\WinRAR\rar.exe"
                 rar_file_path = f"{dir_path}.rar"
+                lock_path = f"{rar_file_path}.lock"
+                folder_inside_rar = os.path.basename(dir_path)
 
-                subprocess.run([rar_exe, "a", rar_file_path, chunk_file_name])
+                with FileLock(lock_path):
+                    subprocess.run([rar_exe, "a", "-ep", f"-ap{folder_inside_rar}", rar_file_path, chunk_file_name], capture_output=True, text=True, check=True)
                 
                 if os.path.exists(chunk_file_name):
                     os.remove(chunk_file_name)
             return
         except Exception as e:
-            print(f"Save failed ({e}), retrying in {5}s...")
+            print(f"Save failed ({e}), retrying in 5s...")
             time.sleep(5)
 
 class IntradayBacktest:

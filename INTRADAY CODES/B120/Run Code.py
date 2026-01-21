@@ -227,7 +227,7 @@ def get_len_of_parameter_data(code, parameter_path):
     _, parameter_len = get_parameter_data(code, parameter_path)
     return parameter_len
         
-def modify_script_for_dir_cache(run_scrip_path, dir_pickle_path):
+def modify_script_for_dir_cache(run_scrip_path, dir_pickle_path, include_rar):
     
     snippet_template = """import pickle
 with open("{dir_pickle_path}", 'rb') as file:
@@ -245,10 +245,25 @@ with open("{dir_pickle_path}", 'rb') as file:
     
     pattern = re.compile(r"^(?P<indent>\s*)if\s+not\s+is_file_exists\s*\(\s*output_csv_path\s*,\s*file_name\s*,\s*parameter_len\s*\)\s*:\s*$")
     for line in fileinput.input(run_scrip_path, inplace=True):
-        new_line = pattern.sub(lambda m: f"{m.group('indent')}if not is_file_exists(output_csv_path, file_name, parameter_len, dir_files=dir_files, include_rar=True):", line)
+        if include_rar:
+            new_line = pattern.sub(lambda m: f"{m.group('indent')}if not is_file_exists(output_csv_path, file_name, parameter_len, dir_files=dir_files, include_rar=True):", line)
+        else:
+            new_line = pattern.sub(lambda m: f"{m.group('indent')}if not is_file_exists(output_csv_path, file_name, parameter_len, dir_files=dir_files):", line)
+        print(new_line, end="")
+        
+def modify_script_for_include_rar(run_scrip_path):
+    pattern = re.compile(r"^(?P<indent>\s*)if\s+not\s+is_file_exists\s*\(\s*output_csv_path\s*,\s*file_name\s*,\s*parameter_len\s*\)\s*:\s*$")
+    for line in fileinput.input(run_scrip_path, inplace=True):
+        new_line = pattern.sub(lambda m: f"{m.group('indent')}if not is_file_exists(output_csv_path, file_name, parameter_len, include_rar=True):", line)
+        print(new_line, end="")
+        
+def modify_script_for_rar_saving(run_scrip_path):
+    pattern = re.compile(r"^(?P<indent>\s*)save_chunk_data\s*\(\s*chunk\s*,\s*log_cols\s*,\s*chunck_file_name\s*\)\s*$")
+    for line in fileinput.input(run_scrip_path, inplace=True):
+        new_line = pattern.sub(lambda m: f"{m.group('indent')}save_chunk_data(chunk, log_cols, chunck_file_name, save_in_rar=True)", line)
         print(new_line, end="")
 
-def get_file_details(meta_data, pickle_path, notebook_path, output_csv_path, code, parameter_len, is_weekly, is_remote):
+def get_file_details(meta_data, pickle_path, notebook_path, output_csv_path, code, parameter_len, is_weekly, is_remote, include_rar):
 
     index_dates = {}
     index_dte_dates = {}
@@ -268,7 +283,7 @@ def get_file_details(meta_data, pickle_path, notebook_path, output_csv_path, cod
                 index, dte, _, _, _, _, date_lists = get_meta_row_data(meta_row, pickle_path)
                 total_dates += len(date_lists)
                 index_dates[index] = index_dates.get(index, 0) + len(date_lists)
-                files_dates = [current_date.date() for current_date in date_lists if not is_file_exists(output_csv_path, f"{index} {current_date.date()} {code}", parameter_len, dir_files, include_rar=True)]
+                files_dates = [current_date.date() for current_date in date_lists if not is_file_exists(output_csv_path, f"{index} {current_date.date()} {code}", parameter_len, dir_files, include_rar=include_rar)]
 
                 if files_dates:
                     total_pending_dates += len(files_dates)
@@ -278,7 +293,7 @@ def get_file_details(meta_data, pickle_path, notebook_path, output_csv_path, cod
                 index, from_dte, to_dte, _, _, _, _, week_lists = get_meta_row_data(meta_row, pickle_path, weekly=True)
                 total_dates += len(week_lists)
                 index_dates[index] = index_dates.get(index, 0) + len(week_lists)
-                files_dates = [week_dates for week_dates in week_lists if not is_file_exists(output_csv_path, f"{index} {week_dates[0].date()} {week_dates[-1].date()} {from_dte}-{to_dte} {code}", parameter_len, dir_files, include_rar=True)]
+                files_dates = [week_dates for week_dates in week_lists if not is_file_exists(output_csv_path, f"{index} {week_dates[0].date()} {week_dates[-1].date()} {from_dte}-{to_dte} {code}", parameter_len, dir_files, include_rar=include_rar)]
 
                 if files_dates:
                     total_pending_dates += len(files_dates)
@@ -440,13 +455,19 @@ if __name__ == "__main__":
     
     is_weekly = True if ("from_dte" in meta_data.columns) and ("to_dte" in meta_data.columns) else False
     is_remote = True if is_network_disk(output_csv_path) else False
-        
+    include_rar = input("\nDo you want to include RAR files in checking existing files? (y/n): ").strip().lower() == 'y'
     weeks_or_dates = "Weeks" if ("from_dte" in meta_data.columns) and ("to_dte" in meta_data.columns) else "Dates"
-    index_dates, index_dte_dates, total_dates, total_pending_dates, dir_pickle_path = get_file_details(meta_data, pickle_path, notebook_path, output_csv_path, code, parameter_len, is_weekly, is_remote)
+    index_dates, index_dte_dates, total_dates, total_pending_dates, dir_pickle_path = get_file_details(meta_data, pickle_path, notebook_path, output_csv_path, code, parameter_len, is_weekly, is_remote, include_rar)
 
     if is_remote:
-        modify_script_for_dir_cache(run_scrip_path, dir_pickle_path)
-    
+        modify_script_for_dir_cache(run_scrip_path, dir_pickle_path, include_rar=include_rar)
+    else:
+        if include_rar:
+            modify_script_for_include_rar(run_scrip_path)
+        
+    if include_rar:
+        modify_script_for_rar_saving(run_scrip_path)
+
     code_details = f'\n#### RUN CODE ####\nCode: {code}\nJupyterCode: {notebook_path.stem} \nParameter: {parameter_path.stem} \nMetaData Parameter: {meta_data_path.stem} \n##################'
 
     file_details = f'\n####### OUTPUT FILES #######\
@@ -510,7 +531,7 @@ if __name__ == "__main__":
                 raise FileNotFoundError(f"Output Directory {output_dir_path} not available")            
             
             fun_timer(10)
-            index_dates, index_dte_dates, total_dates, total_pending_dates, dir_pickle_path = get_file_details(meta_data, pickle_path, notebook_path, output_csv_path, code, parameter_len, is_weekly, is_remote)
+            index_dates, index_dte_dates, total_dates, total_pending_dates, dir_pickle_path = get_file_details(meta_data, pickle_path, notebook_path, output_csv_path, code, parameter_len, is_weekly, is_remote, include_rar)
 
             file_details = f'\n####### OUTPUT FILES #######\
                             \nNo of Chunks: {no_of_chunk} \
@@ -563,10 +584,10 @@ if __name__ == "__main__":
                     
                     if not is_weekly:
                         index, dte, _, _, _, _, date_lists = get_meta_row_data(meta_row, pickle_path)
-                        pending_files = [current_date.date() for current_date in date_lists if not is_file_exists(output_csv_path, f"{index} {current_date.date()} {code}", parameter_len, dir_files, include_rar=True)]
+                        pending_files = [current_date.date() for current_date in date_lists if not is_file_exists(output_csv_path, f"{index} {current_date.date()} {code}", parameter_len, dir_files, include_rar=include_rar)]
                     else:
                         index, from_dte, to_dte, _, _, _, _, week_lists = get_meta_row_data(meta_row, pickle_path, weekly=True)
-                        pending_files = [week_dates for week_dates in week_lists if not is_file_exists(output_csv_path, f"{index} {week_dates[0].date()} {week_dates[-1].date()} {from_dte}-{to_dte} {code}", parameter_len, dir_files, include_rar=True)]
+                        pending_files = [week_dates for week_dates in week_lists if not is_file_exists(output_csv_path, f"{index} {week_dates[0].date()} {week_dates[-1].date()} {from_dte}-{to_dte} {code}", parameter_len, dir_files, include_rar=include_rar)]
 
                     if pending_files and os.path.exists(output_dir_path):
 

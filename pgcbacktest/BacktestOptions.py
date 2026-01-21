@@ -103,7 +103,7 @@ def save_chunk_data(chunk, log_cols, chunk_file_name, save_in_rar=False):
             if not os.path.exists(dir_path):
                 raise FileNotFoundError(f"Directory {dir_path} not available")
 
-            log_data_chunk.to_parquet(chunk_file_name, index=False)
+            log_data_chunk.to_parquet(chunk_file_name, index=False, compression='zstd', compression_level=22)
             
             if save_in_rar:
                 rar_exe = r"C:\Program Files\WinRAR\rar.exe"

@@ -247,7 +247,7 @@ if __name__ == "__main__":
                     chunk_size = max_row
                     for idx, i in enumerate(range(0, len(pnl_data), chunk_size), start=1):
                         chunk_data = pnl_data.slice(i, chunk_size)
-                        chunk_data.write_parquet(f"{dashboard_folder_path}/{index}/{code}-{year}-{day}-{dte}-{pnl_col}-No-{idx}.parquet")
+                        chunk_data.write_parquet(f"{dashboard_folder_path}/{index}/{code}-{year}-{day}-{dte}-{pnl_col}-No-{idx}.parquet", compression='zstd', compression_level=22)
 
         except Exception as e:
             input(f"ERROR !!! {e}")

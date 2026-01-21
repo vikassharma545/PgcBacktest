@@ -198,7 +198,7 @@ if __name__ == "__main__":
                         if use_polars:
                             data.write_parquet(f"{combine_folder_path}/{index}/{file_name}")
                         else:
-                            data.to_parquet(f"{combine_folder_path}/{index}/{file_name}", index=False)
+                            data.to_parquet(f"{combine_folder_path}/{index}/{file_name}", index=False, compression='zstd', compression_level=22)
                     except Exception as e:
                         print(e)
 

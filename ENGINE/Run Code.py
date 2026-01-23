@@ -271,7 +271,25 @@ def get_file_details(meta_data, pickle_path, notebook_path, output_csv_path, cod
     dir_files = set(os.listdir(output_csv_path)) if os.path.exists(output_csv_path) else set()
     dir_pickle_path = Path(tempfile.gettempdir()) / f"{notebook_path.stem}_dir.pkl"
     
-    if is_remote:
+    if include_rar:
+        rar_files = set()
+        output_dir_name = os.path.dirname(output_csv_path)
+        rar_path = f"{output_dir_name}.rar"
+        lock_path = f"{rar_path}.lock"
+
+        if os.path.exists(rar_path):
+            with FileLock(lock_path):
+                while True:
+                    try:
+                        rar_files = set([f.filename.split("/")[-1] for f in rarfile.RarFile(rar_path).infolist() if f.filename.endswith(".parquet")])
+                        break
+                    except Exception as e:
+                        print(f"RAR read failed ({e}), retrying in 5s...")
+                        time.sleep(5)
+
+        dir_files = dir_files.union(rar_files)
+    
+    if is_remote or include_rar:
         with open(dir_pickle_path, 'wb') as file:
             pickle.dump(dir_files, file)
     
@@ -457,12 +475,13 @@ if __name__ == "__main__":
     is_remote = True if is_network_disk(output_csv_path) else False
     include_rar = input("\nDo you want to include RAR files in checking existing files? (y/n): ").strip().lower() == 'y'
     weeks_or_dates = "Weeks" if ("from_dte" in meta_data.columns) and ("to_dte" in meta_data.columns) else "Dates"
-    index_dates, index_dte_dates, total_dates, total_pending_dates, dir_pickle_path = get_file_details(meta_data, pickle_path, notebook_path, output_csv_path, code, parameter_len, is_weekly, is_remote, include_rar=include_rar)
+    index_dates, index_dte_dates, total_dates, total_pending_dates, dir_pickle_path = get_file_details(meta_data, pickle_path, notebook_path, output_csv_path, code, parameter_len, is_weekly, is_remote, include_rar)
 
     if is_remote:
         modify_script_for_dir_cache(run_scrip_path, dir_pickle_path, include_rar=include_rar)
     else:
-        modify_script_for_include_rar(run_scrip_path)
+        if include_rar:
+            modify_script_for_include_rar(run_scrip_path)
         
     if include_rar:
         modify_script_for_rar_saving(run_scrip_path)
@@ -530,7 +549,7 @@ if __name__ == "__main__":
                 raise FileNotFoundError(f"Output Directory {output_dir_path} not available")            
             
             fun_timer(10)
-            index_dates, index_dte_dates, total_dates, total_pending_dates, dir_pickle_path = get_file_details(meta_data, pickle_path, notebook_path, output_csv_path, code, parameter_len, is_weekly, is_remote)
+            index_dates, index_dte_dates, total_dates, total_pending_dates, dir_pickle_path = get_file_details(meta_data, pickle_path, notebook_path, output_csv_path, code, parameter_len, is_weekly, is_remote, include_rar)
 
             file_details = f'\n####### OUTPUT FILES #######\
                             \nNo of Chunks: {no_of_chunk} \
@@ -570,7 +589,7 @@ if __name__ == "__main__":
             new_processes = []
             df = pd.read_csv(temp_meta_data_path)
             
-            if is_remote:
+            if is_remote or include_rar:
                 with open(dir_pickle_path, 'rb') as file:
                     dir_files = pickle.load(file)
             else:

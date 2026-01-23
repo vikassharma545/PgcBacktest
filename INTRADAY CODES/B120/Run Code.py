@@ -271,7 +271,25 @@ def get_file_details(meta_data, pickle_path, notebook_path, output_csv_path, cod
     dir_files = set(os.listdir(output_csv_path)) if os.path.exists(output_csv_path) else set()
     dir_pickle_path = Path(tempfile.gettempdir()) / f"{notebook_path.stem}_dir.pkl"
     
-    if is_remote:
+    if include_rar:
+        rar_files = set()
+        output_dir_name = os.path.dirname(output_csv_path)
+        rar_path = f"{output_dir_name}.rar"
+        lock_path = f"{rar_path}.lock"
+
+        if os.path.exists(rar_path):
+            with FileLock(lock_path):
+                while True:
+                    try:
+                        rar_files = set([f.filename.split("/")[-1] for f in rarfile.RarFile(rar_path).infolist() if f.filename.endswith(".parquet")])
+                        break
+                    except Exception as e:
+                        print(f"RAR read failed ({e}), retrying in 5s...")
+                        time.sleep(5)
+
+        dir_files = dir_files.union(rar_files)
+    
+    if is_remote or include_rar:
         with open(dir_pickle_path, 'wb') as file:
             pickle.dump(dir_files, file)
     
@@ -571,7 +589,7 @@ if __name__ == "__main__":
             new_processes = []
             df = pd.read_csv(temp_meta_data_path)
             
-            if is_remote:
+            if is_remote or include_rar:
                 with open(dir_pickle_path, 'rb') as file:
                     dir_files = pickle.load(file)
             else:

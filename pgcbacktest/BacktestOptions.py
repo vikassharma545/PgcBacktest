@@ -58,39 +58,33 @@ def get_strike(scrip):
     return strike
 
 chunk_size = 100_000
-def is_file_exists(output_csv_path, file_name, parameter_size, dir_files=None, cache=False, include_rar=False):
+def is_file_exists(output_csv_path, file_name, parameter_size, dir_files=None, include_rar=False):
     total_chunks = (parameter_size - 1) // chunk_size + 1
-    
-    rar_files = set()
-    if include_rar:
-        output_dir_name = os.path.dirname(output_csv_path)
-        rar_path = f"{output_dir_name}.rar"
-        lock_path = f"{rar_path}.lock"
-
-        if os.path.exists(rar_path):
-            with FileLock(lock_path):
-                while True:
-                    try:
-                        rar_files = set([f.filename.split("/")[-1] for f in rarfile.RarFile(rar_path).infolist() if f.filename.endswith(".parquet")])
-                        break
-                    except Exception as e:
-                        print(f"RAR read failed ({e}), retrying in 5s...")
-                        time.sleep(5)
-
-    if cache:
-        if not hasattr(is_file_exists, '_cached_dir_files'):
-            is_file_exists._cached_dir_files = set(os.listdir(output_csv_path)) if os.path.exists(output_csv_path) else set()
-            dir_files = is_file_exists._cached_dir_files
-        else:
-            dir_files = is_file_exists._cached_dir_files if dir_files is None else dir_files
 
     if dir_files is not None and not isinstance(dir_files, set):
         dir_files = set(dir_files)
 
     if dir_files is None:
+        
+        rar_files = set()
+        if include_rar:
+            output_dir_name = os.path.dirname(output_csv_path)
+            rar_path = f"{output_dir_name}.rar"
+            lock_path = f"{rar_path}.lock"
+
+            if os.path.exists(rar_path):
+                with FileLock(lock_path):
+                    while True:
+                        try:
+                            rar_files = set([f.filename.split("/")[-1] for f in rarfile.RarFile(rar_path).infolist() if f.filename.endswith(".parquet")])
+                            break
+                        except Exception as e:
+                            print(f"RAR read failed ({e}), retrying in 5s...")
+                            time.sleep(5)
+        
         return all(os.path.exists(f"{output_csv_path}{file_name} No-{idx}.parquet") or (include_rar and f"{file_name} No-{idx}.parquet" in rar_files) for idx in range(1, total_chunks + 1))
     else:
-        return all(f"{file_name} No-{idx}.parquet" in dir_files or (include_rar and f"{file_name} No-{idx}.parquet" in rar_files) for idx in range(1, total_chunks + 1))
+        return all(f"{file_name} No-{idx}.parquet" in dir_files for idx in range(1, total_chunks + 1))
 
 def save_chunk_data(chunk, log_cols, chunk_file_name, save_in_rar=False):
     chunk = [d for d in chunk if d is not None]
@@ -113,6 +107,7 @@ def save_chunk_data(chunk, log_cols, chunk_file_name, save_in_rar=False):
 
                 with FileLock(lock_path):
                     subprocess.run([rar_exe, "a", "-ep", f"-ap{folder_inside_rar}", rar_file_path, chunk_file_name], capture_output=True, text=True, check=True)
+                    sleep(0.3)
                 
                 if os.path.exists(chunk_file_name):
                     os.remove(chunk_file_name)

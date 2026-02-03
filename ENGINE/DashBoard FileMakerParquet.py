@@ -11,7 +11,6 @@ from tqdm import tqdm
 from time import sleep
 from pathlib import Path
 import concurrent.futures
-import dask.dataframe as dd
 import pyarrow.parquet as pq
 from tkinter import Tk, filedialog
 
@@ -103,13 +102,22 @@ def get_parquet_files(folder_path):
     return sorted(iterator)
 
 def get_code_index_cols(parquet_files):
-    code = parquet_files[0].stem.split()[2]
-    indices = sorted(set([f.stem.split()[0] for f in parquet_files]))
+
+    parquet_file_path = max(parquet_files, key=lambda f: os.path.getsize(f))
+    df = pd.read_parquet(parquet_file_path)
+    splits = parquet_file_path.stem.split()
+
+    if len(splits) == 4: # Intraday
+        code_type = "Intraday"
+        code = parquet_files[0].stem.split()[2]
+    elif len(splits) == 6: # Weekly
+        code_type = "Weekly"
+        code = parquet_files[0].stem.split()[4]
     
-    df = pd.read_parquet(max(parquet_files, key=lambda f: os.path.getsize(f)))
+    indices = sorted(set([f.stem.split()[0] for f in parquet_files]))
     name_columns = [c for c in list(df.columns) if c.startswith('P_')]
     pnl_columns = [c for c in list(df.columns) if c.endswith('PNL')]
-    return code, indices, name_columns, pnl_columns
+    return code_type, code, indices, name_columns, pnl_columns
 
 def check_parquet_file(file):
     try:
@@ -118,17 +126,35 @@ def check_parquet_file(file):
     except Exception as e:
         return (f"Invalid file: {file} | Error: {e}")
 
-def get_year_day_dte_files(parquet_files):
-    year_day_dte_files = {}
-    for file in parquet_files:
-        index = file.stem.split()[0]
-        date = datetime.datetime.strptime(file.stem.split()[1], "%Y-%m-%d")
-        year = date.year
-        day = date.strftime('%A')
-        dte = dte_file.loc[date, index]
-        year_day_dte_files[f'{index}-{year}-{day}-{dte}'] = year_day_dte_files.get(f'{index}-{year}-{day}-{dte}', []) + [file]
+def grouping_parquet_files(parquet_files, dte_file, code_type="Intraday"):
 
-    return year_day_dte_files
+    if code_type == "Intraday":
+
+        year_day_dte_files = {}
+        for file in parquet_files:
+            index = file.stem.split()[0]
+            date = datetime.datetime.strptime(file.stem.split()[1], "%Y-%m-%d")
+            year = date.year
+            day = date.strftime('%A')
+            dte = dte_file.loc[date, index]
+            year_day_dte_files[f'{index}-{year}-{day}-{dte}'] = year_day_dte_files.get(f'{index}-{year}-{day}-{dte}', []) + [file]
+
+        return year_day_dte_files
+
+    elif code_type == "Weekly":
+
+        year_dte_files = {}
+        for file in parquet_files:
+            index = file.stem.split()[0]
+            date = datetime.datetime.strptime(file.stem.split()[1], "%Y-%m-%d")
+            year = date.year
+            dte = file.stem.split()[3].replace('-', '_')
+            year_dte_files[f'{index}-{year}-{dte}'] = year_dte_files.get(f'{index}-{year}-{dte}', []) + [file]
+
+        return year_dte_files
+    
+    else:
+        raise ValueError("Invalid code_type. Must be 'Intraday' or 'Weekly'.")
 
 if __name__ == "__main__":
     
@@ -148,9 +174,10 @@ if __name__ == "__main__":
         parquet_files = get_parquet_files(parquet_files_folder_path)
         
         if parquet_files:
-            code, indices, name_columns, pnl_columns = get_code_index_cols(parquet_files)
+            code_type, code, indices, name_columns, pnl_columns = get_code_index_cols(parquet_files)
             print()
             print(f"Total File Uploaded :- {len(parquet_files)}")
+            print(f"Code Type :- {code_type}")
             print(f"Code :- {code}")
             print(f"Indices :- {indices}")
             print(f"Parameter cols :- {', '.join(name_columns)}")
@@ -175,6 +202,28 @@ if __name__ == "__main__":
         print("No DTE CSV file selected. :(")
         input("Press Enter to Exit...")
         sys.exit(0)
+
+    ### checking parquet files
+    print("\nChecking Parquet Files...")
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        results = list(tqdm(executor.map(check_parquet_file, parquet_files), total=len(parquet_files), desc="Checking Parquet Files"))
+
+    errors = [r for r in results if r]
+    error_files = [parquet_files[i] for i, r in enumerate(results) if r]
+
+    if errors:
+        for err in errors:
+            print(err)
+        if input("Delete all error files? (y/n): ").strip().lower() == 'y':
+            for f in error_files:
+                try:
+                    os.remove(f)
+                    print(f"Deleted: {f}")
+                except Exception as e:
+                    print(f"Failed to delete {f}: {e}")
+        input("Press Enter to Exit !!!")
+        sys.exit(0)
+    print("All Parquet files are valid.\n")
     
     if input("Proceed with execution? (y/n): ").strip().lower() != 'y':
         print('❌ Execution cancelled.')
@@ -187,26 +236,35 @@ if __name__ == "__main__":
     
     shutil.rmtree(dashboard_folder_path, ignore_errors=True)
     os.makedirs(dashboard_folder_path, exist_ok=True)
-    year_day_dte_files = get_year_day_dte_files(parquet_files)
+    grouped_parquet = grouping_parquet_files(parquet_files, dte_file, code_type=code_type)
     
     t1 = time.time()
     
-    meta_data = {}
+    meta_data = {'Dates': parquet_files}
     print('\nBuilding DashBoard Files... \n')
     for index in indices:
         try:
             os.makedirs(f"{dashboard_folder_path}/{index}", exist_ok=True)
 
-            for key, value in year_day_dte_files.items():
-                check_index, year, day, dte = key.split('-')
+            for key, value in grouped_parquet.items():
+
+                if code_type == 'Intraday':
+                    check_index, year, day, dte = key.split('-')
+                elif code_type == 'Weekly':
+                    check_index, year, dte = key.split('-')
+
                 if check_index != index: continue
 
                 dashboard_data_list = []
-                chunks = sorted(set([f.stem.split()[-1] for f in year_day_dte_files[key]]), key=lambda x: int(x.split('-')[-1]))
+                chunks = sorted(set([f.stem.split()[-1] for f in grouped_parquet[key]]), key=lambda x: int(x.split('-')[-1]))
                 for chunk in chunks:
 
-                    print(index, year, day, dte, chunk)
-                    chunks_file = [f for f in year_day_dte_files[key] if f.stem.split()[-1] == chunk]
+                    if code_type == 'Intraday':
+                        print(index, year, day, dte, chunk)
+                    elif code_type == 'Weekly':
+                        print(index, year, dte, chunk)
+
+                    chunks_file = [f for f in grouped_parquet[key] if f.stem.split()[-1] == chunk]
 
                     def read_and_cast(path):
                         df = pl.read_parquet(path, columns = (name_columns+pnl_columns))
@@ -224,11 +282,17 @@ if __name__ == "__main__":
                         pl.col("PL Basis").cast(pl.Categorical).alias("PL Basis")
                     ])
 
-                    data = data.with_columns([
-                        pl.lit(int(year)).cast(pl.Int16).alias("Year"),
-                        pl.lit(day).cast(pl.Categorical).alias("Day"),
-                        pl.lit(int(float(dte))).cast(pl.Int8).alias("DTE")
-                    ])
+                    if code_type == 'Intraday':
+                        data = data.with_columns([
+                            pl.lit(int(year)).cast(pl.Int16).alias("Year"),
+                            pl.lit(day).cast(pl.Categorical).alias("Day"),
+                            pl.lit(int(float(dte))).cast(pl.Int8).alias("DTE")
+                        ])
+                    elif code_type == 'Weekly':
+                        data = data.with_columns([
+                            pl.lit(int(year)).cast(pl.Int16).alias("Year"),
+                            pl.lit(dte).cast(pl.Categorical).alias("Start.DTE-End.DTE")
+                        ])
                     
                     dashboard_data_list.append(data)
                     
@@ -247,7 +311,10 @@ if __name__ == "__main__":
                     chunk_size = max_row
                     for idx, i in enumerate(range(0, len(pnl_data), chunk_size), start=1):
                         chunk_data = pnl_data.slice(i, chunk_size)
-                        chunk_data.write_parquet(f"{dashboard_folder_path}/{index}/{code}-{year}-{day}-{dte}-{pnl_col}-No-{idx}.parquet", compression='zstd', compression_level=22)
+                        if code_type == 'Intraday':
+                            chunk_data.write_parquet(f"{dashboard_folder_path}/{index}/{code}-{year}-{day}-{dte}-{pnl_col}-No-{idx}.parquet", compression='zstd', compression_level=22)
+                        elif code_type == 'Weekly':
+                            chunk_data.write_parquet(f"{dashboard_folder_path}/{index}/{code}-{year}-{dte}-{pnl_col}-No-{idx}.parquet", compression='zstd', compression_level=22)
 
         except Exception as e:
             input(f"ERROR !!! {e}")

@@ -473,7 +473,8 @@ if __name__ == "__main__":
     
     is_weekly = True if ("from_dte" in meta_data.columns) and ("to_dte" in meta_data.columns) else False
     is_remote = True if is_network_disk(output_csv_path) else False
-    include_rar = input("\nDo you want to include RAR files in checking existing files? (y/n): ").strip().lower() == 'y'
+    # include_rar = input("\nDo you want to include RAR files in checking existing files? (y/n): ").strip().lower() == 'y'
+    include_rar = False
     weeks_or_dates = "Weeks" if ("from_dte" in meta_data.columns) and ("to_dte" in meta_data.columns) else "Dates"
     index_dates, index_dte_dates, total_dates, total_pending_dates, dir_pickle_path = get_file_details(meta_data, pickle_path, notebook_path, output_csv_path, code, parameter_len, is_weekly, is_remote, include_rar)
 

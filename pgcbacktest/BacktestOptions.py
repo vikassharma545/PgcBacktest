@@ -297,14 +297,18 @@ class IntradayBacktest:
                 ce_price, pe_price = self.options_data.loc[(current_dt,ce_scrip),'close'], self.options_data.loc[(current_dt,pe_scrip),'close']
         
                 if sd:
-                    sd_range = (ce_price+pe_price)*sd
+                    sd_range = abs((ce_price+pe_price)*sd)
                     
                     if SDroundoff:
                         sd_range = round(sd_range/self.gap)*self.gap
                     else:
                         sd_range = max(self.gap, round(sd_range/self.gap)*self.gap)
 
-                    ce_scrip, pe_scrip = f"{get_strike(ce_scrip) + sd_range}CE", f"{get_strike(pe_scrip) - sd_range}PE"
+                    if sd < 0:
+                        ce_scrip, pe_scrip = f"{get_strike(ce_scrip) - sd_range}CE", f"{get_strike(pe_scrip) + sd_range}PE"
+                    else:
+                        ce_scrip, pe_scrip = f"{get_strike(ce_scrip) + sd_range}CE", f"{get_strike(pe_scrip) - sd_range}PE"
+
                     ce_price, pe_price = self.options_data.loc[(current_dt,ce_scrip),'close'], self.options_data.loc[(current_dt,pe_scrip),'close']
                 
                 return ce_scrip, pe_scrip, ce_price, pe_price, future_price, current_dt

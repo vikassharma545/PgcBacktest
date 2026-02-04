@@ -3,7 +3,6 @@ import sys
 import time
 import shutil
 import datetime
-import numpy as np
 import polars as pl
 import pandas as pd
 from tqdm import tqdm
@@ -12,9 +11,6 @@ from pathlib import Path
 import concurrent.futures
 import pyarrow.parquet as pq
 from tkinter import Tk, filedialog
-
-from pgcbacktest.BtParameters import *
-from pgcbacktest.BacktestOptions import *
 
 pl.enable_string_cache()
 

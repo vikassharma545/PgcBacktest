@@ -4,7 +4,6 @@ import time
 import shutil
 import pickle
 import datetime
-import numpy as np
 import polars as pl
 import pandas as pd
 from tqdm import tqdm
@@ -13,9 +12,6 @@ from pathlib import Path
 import concurrent.futures
 import pyarrow.parquet as pq
 from tkinter import Tk, filedialog
-
-from pgcbacktest.BtParameters import *
-from pgcbacktest.BacktestOptions import *
 
 pl.enable_string_cache()
 
@@ -240,7 +236,7 @@ if __name__ == "__main__":
     
     t1 = time.time()
     
-    meta_data = {'Dates': parquet_files}
+    meta_data = {'CodeType': code_type, 'Strategy': code, 'Dates': parquet_files}
     print('\nBuilding DashBoard Files... \n')
     for index in indices:
         try:
@@ -301,9 +297,8 @@ if __name__ == "__main__":
 
                 dashboard_data = pl.concat(dashboard_data_list, how="vertical")
                 
-                # storing unique values of column of dtype Categorical, Int16, Int8
                 for col in dashboard_data.columns:
-                    if dashboard_data[col].dtype in [pl.Categorical, pl.Int16, pl.Int8]:
+                    if col not in ["Strategy", "Points"]:
                         meta_data[col] = meta_data.get(col, set()).union(set(dashboard_data[col].unique().to_list()))
 
                 for pnl_col in pnl_columns:

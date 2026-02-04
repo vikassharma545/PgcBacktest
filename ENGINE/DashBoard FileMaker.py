@@ -10,7 +10,6 @@ from tqdm import tqdm
 from time import sleep
 from pathlib import Path
 import concurrent.futures
-import dask.dataframe as dd
 import pyarrow.parquet as pq
 from tkinter import Tk, filedialog
 
@@ -267,7 +266,7 @@ if __name__ == "__main__":
 
                     def read_and_cast(path):
                         df = pl.read_parquet(path, columns = (name_columns+pnl_columns))
-                        return df.with_columns([pl.col(name_columns).cast(pl.Utf8).cast(pl.Categorical), pl.col(pnl_columns) .cast(pl.Float64)])
+                        return df.with_columns([pl.col(name_columns).cast(pl.Utf8).cast(pl.Categorical), pl.col(pnl_columns).cast(pl.Float64)])
 
                     with concurrent.futures.ThreadPoolExecutor() as exe:
                         dfs = list(exe.map(read_and_cast, chunks_file))
@@ -275,7 +274,7 @@ if __name__ == "__main__":
                     data = pl.concat(dfs)
                     data = data.group_by(name_columns).agg([pl.col(col).sum() for col in pnl_columns])
                     data = data.unpivot(index=name_columns, on=pnl_columns, variable_name='PL Basis', value_name='Points')
-                    data.columns = [c.replace('P_','') for c in data.columns]
+                    data.columns = [c.replace('P_','', 1) if c.startswith('P_') else c for c in data.columns]
                 
                     data = data.with_columns([
                         pl.col("PL Basis").cast(pl.Categorical).alias("PL Basis")
@@ -294,6 +293,9 @@ if __name__ == "__main__":
                         ])
                         
                     dashboard_data_list.append(data)
+                    
+                if not dashboard_data_list:
+                    continue
 
                 dashboard_data = pl.concat(dashboard_data_list, how="vertical")
 

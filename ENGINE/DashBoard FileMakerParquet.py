@@ -122,7 +122,7 @@ def check_parquet_file(file):
     except Exception as e:
         return (f"Invalid file: {file} | Error: {e}")
 
-def grouping_parquet_files(parquet_files, dte_file, code_type="Intraday"):
+def grouping_parquet_files(parquet_files, dte_file, code_type="Intraday/Weekly"):
 
     if code_type == "Intraday":
 

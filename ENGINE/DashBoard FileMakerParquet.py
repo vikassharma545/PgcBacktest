@@ -312,9 +312,9 @@ if __name__ == "__main__":
                     for idx, i in enumerate(range(0, len(pnl_data), chunk_size), start=1):
                         chunk_data = pnl_data.slice(i, chunk_size)
                         if code_type == 'Intraday':
-                            chunk_data.write_parquet(f"{dashboard_folder_path}/{index}/{code}-{year}-{day}-{dte}-{pnl_col}-No-{idx}.parquet", compression='zstd', compression_level=22)
+                            chunk_data.write_parquet(f"{dashboard_folder_path}/{index}/{code}-{year}-{day}-{dte}-{pnl_col}-No-{idx}.parquet")
                         elif code_type == 'Weekly':
-                            chunk_data.write_parquet(f"{dashboard_folder_path}/{index}/{code}-{year}-{dte}-{pnl_col}-No-{idx}.parquet", compression='zstd', compression_level=22)
+                            chunk_data.write_parquet(f"{dashboard_folder_path}/{index}/{code}-{year}-{dte}-{pnl_col}-No-{idx}.parquet")
 
         except Exception as e:
             input(f"ERROR !!! {e}")

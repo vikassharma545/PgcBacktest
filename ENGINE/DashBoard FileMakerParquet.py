@@ -105,10 +105,10 @@ def get_code_index_cols(parquet_files):
 
     if len(splits) == 4: # Intraday
         code_type = "Intraday"
-        code = parquet_files[0].stem.split()[2]
+        index, date, code, chunk = splits
     elif len(splits) == 6: # Weekly
         code_type = "Weekly"
-        code = parquet_files[0].stem.split()[4]
+        index, start_date, end_date, dte, code, chunk = splits
     
     indices = sorted(set([f.stem.split()[0] for f in parquet_files]))
     name_columns = [c for c in list(df.columns) if c.startswith('P_')]

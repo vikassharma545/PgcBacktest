@@ -55,14 +55,23 @@ def get_parquet_files(folder_path):
     return sorted(iterator)
 
 def get_code_index_cols(parquet_files):
-    code = parquet_files[0].stem.split()[2]
-    indices = sorted(set([f.stem.split()[0] for f in parquet_files]))
     
-    df = pd.read_parquet(max(parquet_files, key=lambda f: os.path.getsize(f)))
+    parquet_file_path = max(parquet_files, key=lambda f: os.path.getsize(f))
+    df = pd.read_parquet(parquet_file_path)
+    splits = parquet_file_path.stem.split()
+    
+    if len(splits) == 4: # Intraday
+        code_type = "Intraday"
+        index, date, code, chunk = splits
+    elif len(splits) == 6: # Weekly
+        code_type = "Weekly"
+        index, start_date, end_date, dte, code, chunk = splits
+    
+    indices = sorted(set([f.stem.split()[0] for f in parquet_files]))
     name_columns = [c for c in list(df.columns) if c.startswith('P_')]
     pnl_columns = [c for c in list(df.columns) if c.endswith('PNL')]
     others_columns = [c for c in list(df.columns) if c not in name_columns + pnl_columns]
-    return code, indices, name_columns, pnl_columns, others_columns
+    return code_type, code, indices, name_columns, pnl_columns, others_columns
 
 def check_parquet_file(file):
     try:
@@ -88,9 +97,10 @@ if __name__ == "__main__":
         parquet_files = get_parquet_files(parquet_files_folder_path)
         
         if parquet_files:
-            code, indices, name_columns, pnl_columns, others_columns = get_code_index_cols(parquet_files)
+            code_type, code, indices, name_columns, pnl_columns, others_columns = get_code_index_cols(parquet_files)
             print()
             print(f"Total File Uploaded :- {len(parquet_files)}")
+            print(f"Code Type :- {code_type}")
             print(f"Code :- {code}")
             print(f"Indices :- {indices}")
             print(f"Parameter cols :- {', '.join(name_columns)}")

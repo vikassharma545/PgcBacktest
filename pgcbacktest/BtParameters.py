@@ -551,6 +551,15 @@ def get_parameter_data(code, parameter_path):
         if code == 'SUT_SI':
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
             
+    
+    elif (code == 'STARGET'):
+
+        #filer intra sl
+        parameter['intra_sl'] = parameter.apply(lambda row: row['sl'] + float(row['intra_sl'].split('+')[-1]) if '+' in str(row['intra_sl']) else float(row['intra_sl']), axis=1)
+        parameter = parameter[~((parameter['intra_sl'] != 0) & (parameter['intra_sl'] < parameter['sl']))]
+
+        parameter['orderside'] = parameter['orderside'].str.upper()
+            
     elif (code == 'SUT_TT'):
 
         #filer intra sl

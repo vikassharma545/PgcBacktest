@@ -260,7 +260,7 @@ class IntradayBacktest:
             
             return straddle_data
 
-    def get_straddle_strike(self, start_dt, end_dt, sd=0, SDroundoff=False):
+    def get_straddle_strike(self, start_dt, end_dt, sd=0, atm=None, SDroundoff=False):
 
         valid_times = self.future_data.loc[start_dt:end_dt].index
         for current_dt in valid_times:
@@ -309,9 +309,28 @@ class IntradayBacktest:
                     else:
                         ce_scrip, pe_scrip = f"{get_strike(ce_scrip) + sd_range}CE", f"{get_strike(pe_scrip) - sd_range}PE"
 
-                    ce_price, pe_price = self.options_data.loc[(current_dt,ce_scrip),'close'], self.options_data.loc[(current_dt,pe_scrip),'close']
-                
+                elif atm is not None and "ATM" in str(atm).upper():
+                    
+                    atm = str(atm).upper().replace(' ', '')
+                    if atm == "ATM":
+                        pass
+                    elif "%" in str(atm):
+                        pct_val = float(atm.replace("ATM", "").replace("%", ""))
+                        target_value = future_price * (pct_val/100.0)
+                        target_value = round(target_value/self.gap) * self.gap
+                        
+                        ce_scrip = f"{get_strike(ce_scrip) + target_value}CE"
+                        pe_scrip = f"{get_strike(pe_scrip) - target_value}PE"
+                    else:
+                        steps = int(atm.replace("ATM", ""))
+                        target_value = steps*self.gap
+                        
+                        ce_scrip = f"{get_strike(ce_scrip) + target_value}CE"
+                        pe_scrip = f"{get_strike(pe_scrip) - target_value}PE"
+
+                ce_price, pe_price = self.options_data.loc[(current_dt,ce_scrip),'close'], self.options_data.loc[(current_dt,pe_scrip),'close']
                 return ce_scrip, pe_scrip, ce_price, pe_price, future_price, current_dt
+            
             except (IndexError, KeyError, ValueError, TypeError):
                 continue
             except Exception as e:
@@ -408,10 +427,10 @@ class IntradayBacktest:
 
     def _get_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1, only=None, obove_target_only=False, SDroundoff=False):
         
-        if '%' in str(om) or obove_target_only:
+        if ('%' in str(om) and "ATM" not in str(om).upper()) or obove_target_only:
             
-            if '%' in str(om):
-                om_precent = float(om.replace('%', ''))
+            if '%' in str(om) and 'ATM' not in str(om).upper():
+                om_precent = float(om.replace(' ', '').replace('%', ''))
                 future_price = self.future_data['close'].iloc[0]
                 one_om = self.get_one_om(future_price)
                 target = one_om*om_precent/100
@@ -421,6 +440,9 @@ class IntradayBacktest:
             if 'SD' in str(om).upper():
                 sd = float(om.upper().replace(' ', '').replace('SD', ''))
                 om = None
+            elif "ATM" in str(om).upper():
+                sd = 0
+                om = str(om).upper().replace(' ', '')
             else:
                 sd = 0
                 om = float(om) if om else om

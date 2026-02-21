@@ -440,15 +440,18 @@ class IntradayBacktest:
             if 'SD' in str(om).upper():
                 sd = float(om.upper().replace(' ', '').replace('SD', ''))
                 om = None
+                atm = None
             elif "ATM" in str(om).upper():
                 sd = 0
-                om = str(om).upper().replace(' ', '')
+                atm = str(om).upper().replace(' ', '')
+                om = None
             else:
                 sd = 0
+                atm = None
                 om = float(om) if om else om
 
             if (om is None or om <= 0) and target is None:
-                ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_straddle_strike(start_dt, end_dt, sd=sd, SDroundoff=SDroundoff)
+                ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_straddle_strike(start_dt, end_dt, sd=sd, atm=atm, SDroundoff=SDroundoff)
             else:
                 ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_strangle_strike(start_dt, end_dt, om=om, target=target, check_inverted=check_inverted, tf=tf)
                 

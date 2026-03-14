@@ -23,6 +23,17 @@ from nbconvert import PythonExporter
 from pgcbacktest.BtParameters import *
 from pgcbacktest.BacktestOptions import *
 
+def get_sleep_config(parameter_len):
+    """Dynamic sleep/timer values based on parameter size."""
+    if parameter_len < 5_000:
+        return {'launch': 0.5, 'monitor': 3, 'rebalance_per_proc': 0.5}
+    elif parameter_len < 20_000:
+        return {'launch': 1, 'monitor': 5, 'rebalance_per_proc': 1}
+    elif parameter_len < 100_000:
+        return {'launch': 2, 'monitor': 8, 'rebalance_per_proc': 1.5}
+    else:
+        return {'launch': 3, 'monitor': 10, 'rebalance_per_proc': 2}
+
 def print_heading(title="🗂 Heading"):
     print("\n" + "="*60)
     print(f"{title.center(60)}")
@@ -36,6 +47,7 @@ def set_terminal_title(title: str):
         sys.stdout.flush()
 
 def fun_timer(seconds):
+    seconds = max(1, int(seconds))
     for i in range(seconds, -1, -1):
         print(f"🚀 {i} seconds 🚀", end="\r")
         sleep(1)
@@ -470,6 +482,7 @@ if __name__ == "__main__":
     parameter_len = get_len_of_parameter_data(code, parameter_path)
     meta_data, _ = get_meta_data(code, meta_data_path)
     no_of_chunk = math.ceil(parameter_len/chunk_size)
+    sleep_config = get_sleep_config(parameter_len)
     
     is_weekly = True if ("from_dte" in meta_data.columns) and ("to_dte" in meta_data.columns) else False
     is_remote = True if is_network_disk(output_csv_path) else False
@@ -525,7 +538,7 @@ if __name__ == "__main__":
                 pid_file = Path(tempfile.gettempdir()) / f"proc_{code}_{idx}.pid"
                 cmd = f"echo $$ > {pid_file}; exec {sys.executable} '{run_scrip_path}' -r {idx}"
                 proc = subprocess.Popen(["gnome-terminal", "--", "bash", "-c", cmd], start_new_session=True)
-                sleep(3)
+                sleep(sleep_config['launch'])
 
                 try:
                     script_pid = int(pid_file.read_text().strip())
@@ -533,7 +546,7 @@ if __name__ == "__main__":
                     pid_file.unlink(missing_ok=True)         
             else:
                 proc = subprocess.Popen([sys.executable, run_scrip_path, "-r", str(idx)], creationflags=subprocess.CREATE_NEW_CONSOLE)
-                sleep(3)
+                sleep(sleep_config['launch'])
                 script_pid = proc.pid
 
             try:
@@ -549,7 +562,7 @@ if __name__ == "__main__":
             if not os.path.exists(output_dir_path):
                 raise FileNotFoundError(f"Output Directory {output_dir_path} not available")            
             
-            fun_timer(10)
+            fun_timer(sleep_config['monitor'])
             index_dates, index_dte_dates, total_dates, total_pending_dates, dir_pickle_path = get_file_details(meta_data, pickle_path, notebook_path, output_csv_path, code, parameter_len, is_weekly, is_remote, include_rar)
 
             file_details = f'\n####### OUTPUT FILES #######\
@@ -618,7 +631,7 @@ if __name__ == "__main__":
                             pid_file = Path(tempfile.gettempdir()) / f"proc_{code}_{idx}.pid"
                             cmd = f"echo $$ > {pid_file}; exec {sys.executable} '{run_scrip_path}' -r {idx}"
                             proc = subprocess.Popen(["gnome-terminal", "--", "bash", "-c", cmd], start_new_session=True)
-                            sleep(3)
+                            sleep(sleep_config['launch'])
 
                             try:
                                 script_pid = int(pid_file.read_text().strip())
@@ -626,7 +639,7 @@ if __name__ == "__main__":
                                 pid_file.unlink(missing_ok=True)         
                         else:
                             proc = subprocess.Popen([sys.executable, run_scrip_path, "-r", str(idx)], creationflags=subprocess.CREATE_NEW_CONSOLE)
-                            sleep(3)
+                            sleep(sleep_config['launch'])
                             script_pid = proc.pid
 
                         try:
@@ -661,7 +674,7 @@ if __name__ == "__main__":
 
                 ### Run the converted script
                 print('\nCode is About to Restart in ...')
-                fun_timer(len(processes)*2)
+                fun_timer(max(1, int(len(processes) * sleep_config['rebalance_per_proc'])))
                 print('\nRunning Code...\n')
                 processes = []
                 df = pd.read_csv(temp_meta_data_path)
@@ -675,7 +688,7 @@ if __name__ == "__main__":
                             pid_file = Path(tempfile.gettempdir()) / f"proc_{code}_{idx}.pid"
                             cmd = f"echo $$ > {pid_file}; exec {sys.executable} '{run_scrip_path}' -r {idx}"
                             proc = subprocess.Popen(["gnome-terminal", "--", "bash", "-c", cmd], start_new_session=True)
-                            sleep(3)
+                            sleep(sleep_config['launch'])
                             
                             try:
                                 script_pid = int(pid_file.read_text().strip())
@@ -684,7 +697,7 @@ if __name__ == "__main__":
 
                         else:
                             proc = subprocess.Popen([sys.executable, run_scrip_path, "-r", str(idx)], creationflags=subprocess.CREATE_NEW_CONSOLE)
-                            sleep(3)
+                            sleep(sleep_config['launch'])
                             script_pid = proc.pid
 
                         try:

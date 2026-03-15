@@ -110,7 +110,7 @@ def get_pickle_path(meta_data_path):
     if sys.platform == "win32":
         base_dir = "P:/PGC Data"
     elif sys.platform == "linux":
-        base_dir = os.environ['HOME'] # "/home/user"
+        base_dir = os.environ['HOME']
     else:
         print("OS not Defined !!!")
         print("\nPlease select the Pickle folder: ")
@@ -173,18 +173,16 @@ def is_network_disk(path):
     if sys.platform == 'win32':
         
         DRIVE_REMOTE = 4
-        drive_letter = os.path.splitdrive(path)[0].replace(':', '')  # 'Z' from 'Z:\\'
+        drive_letter = os.path.splitdrive(path)[0].replace(':', '')
         drive_type = ctypes.windll.kernel32.GetDriveTypeW(f"{drive_letter}:\\")
         return drive_type == DRIVE_REMOTE
     
     else:
-        # On Linux/Unix
         network_fstypes = {'nfs', 'cifs', 'smbfs', 'nfs4', 'sshfs', 'afpfs', 'fuse.sshfs'}
         with open('/proc/mounts', 'r') as f:
             mounts = [line.split() for line in f if len(line.split()) >= 3]
 
         abspath = os.path.abspath(path)
-        # Build all parents, longest first
         parents = []
         while True:
             parents.append(abspath)
@@ -202,7 +200,6 @@ def is_network_disk(path):
 
 def convert_notebook_to_script(pickle_path: Path, notebook_path: Path, parameter_path: Path, meta_data_path: Path):
     
-    ## reading jupyter notebook file
     with open(notebook_path, 'r', encoding='utf-8') as nb_file:
         nb_content = nbformat.read(nb_file, as_version=4)
         
@@ -262,7 +259,6 @@ def modify_script_for_run_code(run_scrip_path, is_remote=False, include_rar=Fals
     4. Add save_in_rar to save_chunk_data (rar mode)
     """
     
-    # Step 1: Inject dir_cache pickle loader at top of script (remote drives)
     if is_remote and dir_pickle_path:
         snippet = f"""import pickle\nwith open("{dir_pickle_path.as_posix()}", 'rb') as file:\n    dir_files = pickle.load(file)\n\n"""
         with open(run_scrip_path) as f:
@@ -270,7 +266,6 @@ def modify_script_for_run_code(run_scrip_path, is_remote=False, include_rar=Fals
         with open(run_scrip_path, "w") as f:
             f.write(snippet + original)
     
-    # Step 2: Build extra args
     extra_args = []
     if is_remote:
         extra_args.append('dir_files=dir_files')
@@ -278,35 +273,27 @@ def modify_script_for_run_code(run_scrip_path, is_remote=False, include_rar=Fals
         extra_args.append('include_rar=True')
     args_str = (', ' + ', '.join(extra_args)) if extra_args else ''
     
-    # Step 3: Patterns
-    # Old notebooks: if not is_file_exists(output_csv_path, file_name, parameter_len):
     pattern_old = re.compile(r"^(?P<indent>\s*)if\s+not\s+is_file_exists\s*\(\s*output_csv_path\s*,\s*file_name\s*,\s*parameter_len\s*\)\s*:\s*$")
-    # New notebooks already using claim_date — just add extra args
     pattern_new = re.compile(r"^(?P<indent>\s*)(with\s+)?claim_date\s*\(\s*output_csv_path\s*,\s*file_name\s*,\s*parameter_len\s*\)")
     pattern_save = re.compile(r"^(?P<indent>\s*)save_chunk_data\s*\(\s*chunk\s*,\s*log_cols\s*,\s*chunck_file_name\s*\)\s*$") if include_rar else None
     
-    insert_continue = False  # flag to insert 'if not claimed: continue' after conversion
-    pending_blank_lines = []  # buffer blank lines until we find body indent
+    insert_continue = False
+    pending_blank_lines = []
     
     for line in fileinput.input(run_scrip_path, inplace=True):
         
-        # After converting is_file_exists → claim_date, find body indent
         if insert_continue:
             if line.strip() == '':
-                # Buffer blank lines — don't know indent yet
                 pending_blank_lines.append(line)
                 continue
             else:
-                # First non-blank line — this is the body
                 body_indent = re.match(r"^(\s*)", line).group(1)
                 print(f"{body_indent}if not claimed: continue")
-                # Flush buffered blank lines
                 for bl in pending_blank_lines:
                     print(bl, end="")
                 pending_blank_lines = []
                 insert_continue = False
         
-        # Convert old is_file_exists → claim_date
         m_old = pattern_old.match(line)
         if m_old:
             indent = m_old.group('indent')
@@ -314,11 +301,9 @@ def modify_script_for_run_code(run_scrip_path, is_remote=False, include_rar=Fals
             insert_continue = True
             continue
         
-        # Update existing claim_date with extra args
         if extra_args:
             line = pattern_new.sub(lambda m: f"{m.group('indent')}{m.group(2) or ''}claim_date(output_csv_path, file_name, parameter_len{args_str})", line)
         
-        # Update save_chunk_data for rar
         if pattern_save:
             line = pattern_save.sub(lambda m: f"{m.group('indent')}save_chunk_data(chunk, log_cols, chunck_file_name, save_in_rar=True)", line)
         
@@ -327,7 +312,6 @@ def modify_script_for_run_code(run_scrip_path, is_remote=False, include_rar=Fals
 def get_file_details(meta_data, pickle_path, notebook_path, output_csv_path, code, parameter_len, is_weekly, is_remote, include_rar):
 
     index_dates = {}
-    index_dte_dates = {}
     total_dates, total_pending_dates = 0, 0
     dir_files = set(os.listdir(output_csv_path)) if os.path.exists(output_csv_path) else set()
     dir_pickle_path = Path(tempfile.gettempdir()) / f"{notebook_path.stem}_dir.pkl"
@@ -363,22 +347,17 @@ def get_file_details(meta_data, pickle_path, notebook_path, output_csv_path, cod
                 total_dates += len(date_lists)
                 index_dates[index] = index_dates.get(index, 0) + len(date_lists)
                 files_dates = [current_date.date() for current_date in date_lists if not is_file_exists(output_csv_path, f"{index} {current_date.date()} {code}", parameter_len, dir_files, include_rar=include_rar)]
-
                 if files_dates:
                     total_pending_dates += len(files_dates)
-                    index_dte_dates[(index, dte)] = sorted(index_dte_dates.get((index, dte), []) + files_dates)
-            
             else:
                 index, from_dte, to_dte, _, _, _, _, week_lists = get_meta_row_data(meta_row, pickle_path, weekly=True)
                 total_dates += len(week_lists)
                 index_dates[index] = index_dates.get(index, 0) + len(week_lists)
                 files_dates = [week_dates for week_dates in week_lists if not is_file_exists(output_csv_path, f"{index} {week_dates[0].date()} {week_dates[-1].date()} {from_dte}-{to_dte} {code}", parameter_len, dir_files, include_rar=include_rar)]
-
                 if files_dates:
                     total_pending_dates += len(files_dates)
-                    index_dte_dates[(index, from_dte, to_dte)] = sorted(index_dte_dates.get((index, from_dte, to_dte), []) + files_dates)
 
-    return index_dates, index_dte_dates, total_dates, total_pending_dates, dir_pickle_path
+    return index_dates, total_dates, total_pending_dates, dir_pickle_path
 
 def checking_all_parquet_file(output_csv_path):
 
@@ -472,10 +451,9 @@ if __name__ == "__main__":
     
     is_weekly = True if ("from_dte" in meta_data.columns) and ("to_dte" in meta_data.columns) else False
     is_remote = True if is_network_disk(output_csv_path) else False
-    # include_rar = input("\nDo you want to include RAR files in checking existing files? (y/n): ").strip().lower() == 'y'
     include_rar = False
     weeks_or_dates = "Weeks" if ("from_dte" in meta_data.columns) and ("to_dte" in meta_data.columns) else "Dates"
-    index_dates, index_dte_dates, total_dates, total_pending_dates, dir_pickle_path = get_file_details(meta_data, pickle_path, notebook_path, output_csv_path, code, parameter_len, is_weekly, is_remote, include_rar)
+    index_dates, total_dates, total_pending_dates, dir_pickle_path = get_file_details(meta_data, pickle_path, notebook_path, output_csv_path, code, parameter_len, is_weekly, is_remote, include_rar)
 
     modify_script_for_run_code(run_scrip_path, is_remote=is_remote, include_rar=include_rar, dir_pickle_path=dir_pickle_path)
 
@@ -525,7 +503,6 @@ if __name__ == "__main__":
             cmd = f"echo $$ > {pid_file}; exec {sys.executable} '{run_scrip_path}'"
             proc = subprocess.Popen(["gnome-terminal", "--", "bash", "-c", cmd], start_new_session=True)
             
-            # Polling loop instead of single hard sleep to prevent FileNotFoundError
             script_pid = None
             for _ in range(15):
                 if pid_file.exists():
@@ -554,21 +531,22 @@ if __name__ == "__main__":
             print(f'  Process not found for {label}')
             return None
 
-    ### Launch initial terminals
+    ### Launch initial terminals — FIX: cap at pending dates
     if not run_rows:
         print("No rows to run!")
         sys.exit()
     
-    print(f'\nLaunching {cpu_config["initial"]} terminals...\n')
+    initial_count = min(cpu_config['initial'], total_pending_dates)
+    print(f'\nLaunching {initial_count} terminals ({total_pending_dates} pending)...\n')
     
-    processes = []  # list of psutil.Process
-    for t in range(cpu_config['initial']):
+    processes = []
+    for t in range(initial_count):
         result = launch_terminal()
         if result:
             processes.append(result)
 
     ### Monitor loop with auto-scaling
-    scale_check_interval = 20  # seconds between CPU checks
+    scale_check_interval = 60
     last_scale_time = time.time()
     
     while True:
@@ -578,7 +556,7 @@ if __name__ == "__main__":
                 raise FileNotFoundError(f"Output Directory {output_dir_path} not available")            
             
             fun_timer(sleep_config['monitor'])
-            index_dates, index_dte_dates, total_dates, total_pending_dates, dir_pickle_path = get_file_details(meta_data, pickle_path, notebook_path, output_csv_path, code, parameter_len, is_weekly, is_remote, include_rar)
+            index_dates, total_dates, total_pending_dates, _ = get_file_details(meta_data, pickle_path, notebook_path, output_csv_path, code, parameter_len, is_weekly, is_remote, include_rar)
 
             file_details = f'\n####### OUTPUT FILES #######\
                             \nNo of Chunks: {no_of_chunk} \
@@ -617,28 +595,34 @@ if __name__ == "__main__":
             ### Restart dead terminals
             new_processes = []
             dead_count = 0
+            running_count = 0
+            max_needed = min(cpu_config['max'], total_pending_dates)
+            
             for proc in processes:
                 if proc.is_running():
                     new_processes.append(proc)
+                    running_count += 1
                 else:
                     dead_count += 1
-                    if total_pending_dates > 0 and os.path.exists(output_dir_path):
+                    if running_count < max_needed and os.path.exists(output_dir_path):
                         result = launch_terminal()
                         if result:
                             new_processes.append(result)
+                            running_count += 1
 
             processes = new_processes
             
-            ### Auto-scale: check CPU and add terminals if headroom available
+            ### Auto-scale
             now = time.time()
             if now - last_scale_time >= scale_check_interval and total_pending_dates > 0:
                 last_scale_time = now
                 cpu_percent = psutil.cpu_percent(interval=2)
                 
                 running_count = len([1 for p in processes if p.is_running()])
+                max_needed = min(cpu_config['max'], total_pending_dates)
                 
-                if running_count < cpu_config['max'] and cpu_percent < cpu_config['scale_up_threshold']:
-                    print(f"\n>>> CPU at {cpu_percent:.0f}% < {cpu_config['scale_up_threshold']}% — scaling up ({running_count} → {running_count + 1})")
+                if running_count < max_needed and cpu_percent < cpu_config['scale_up_threshold']:
+                    print(f"\n>>> CPU at {cpu_percent:.0f}% < {cpu_config['scale_up_threshold']}% — scaling up ({running_count} → {running_count + 1}, {total_pending_dates} pending)")
                     result = launch_terminal()
                     if result:
                         processes.append(result)
@@ -647,7 +631,8 @@ if __name__ == "__main__":
                     print(f"\n>>> CPU at {cpu_percent:.0f}% ≥ {cpu_config['scale_up_ceiling']}% — holding at {running_count} terminals")
 
             running_count = len([1 for p in processes if p.is_running()])
-            print(f"\nRunning: {running_count} terminals (max: {cpu_config['max']})")
+            max_needed = min(cpu_config['max'], total_pending_dates)
+            print(f"\nRunning: {running_count} / {max_needed} terminals ({total_pending_dates} pending)")
             if dead_count:
                 print(f"Restarted: {dead_count} terminals")
 

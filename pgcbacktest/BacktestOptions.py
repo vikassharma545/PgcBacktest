@@ -15,6 +15,7 @@ from time import sleep
 import concurrent.futures
 from filelock import FileLock
 from functools import lru_cache
+from contextlib import contextmanager
 pd.set_option('future.no_silent_downcasting', True)
 
 NSE_INDICES = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY']
@@ -84,6 +85,46 @@ def is_file_exists(output_csv_path, file_name, parameter_size, dir_files=None, i
         dir_files = set(dir_files)
 
     return all(f"{file_name} No-{idx}.parquet" in dir_files for idx in range(1, total_chunks + 1))
+
+@contextmanager
+def claim_date(output_csv_path, file_name, parameter_size, dir_files=None, include_rar=False):
+    """
+    Usage:
+        with claim_date(output_csv_path, file_name, parameter_len) as claimed:
+            if not claimed: continue
+            # ... process date ...
+    
+    Auto-releases lock on exit (normal, continue, or exception).
+    """
+    # Step 1: Fast skip — cache or lock exists
+    if is_file_exists(output_csv_path, file_name, parameter_size, dir_files=dir_files, include_rar=include_rar):
+        yield False
+        return
+    
+    # Step 2: Try lock
+    lock_path = os.path.join(output_csv_path, f"{file_name}.lock")
+    try:
+        lock = FileLock(lock_path, timeout=0)
+        lock.acquire()
+    except Exception:
+        yield False
+        return
+    
+    # Step 3: Real disk check after lock
+    if is_file_exists(output_csv_path, file_name, parameter_size, include_rar=include_rar):
+        lock.release()
+        try: os.remove(lock_path)
+        except Exception: pass
+        yield False
+        return
+    
+    # Claimed — process date
+    try:
+        yield True
+    finally:
+        lock.release()
+        try: os.remove(lock_path)
+        except Exception: pass
 
 def save_chunk_data(chunk, log_cols, chunk_file_name, save_in_rar=False):
     chunk = [d for d in chunk if d is not None]

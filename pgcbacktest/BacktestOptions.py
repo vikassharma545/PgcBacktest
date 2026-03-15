@@ -1440,7 +1440,7 @@ class WeeklyBacktest(IntradayBacktest):
         else:
             return lower_range, upper_range
         
-    def get_straddle_strike(self, start_dt, end_dt, sd=0, SDroundoff=False):
+    def get_straddle_strike(self, start_dt, end_dt, sd=0, atm=None, SDroundoff=False):
 
         current_date = start_dt.date()
         valid_times = self.future_data.loc[start_dt:end_dt].index
@@ -1474,16 +1474,38 @@ class WeeklyBacktest(IntradayBacktest):
                 ce_price, pe_price = self._price_lookup[(current_dt, ce_scrip)], self._price_lookup[(current_dt, pe_scrip)]
         
                 if sd:
-                    sd_range = (ce_price+pe_price)*sd
+                    sd_range = abs((ce_price+pe_price)*sd)
                     
                     if SDroundoff:
                         sd_range = round(sd_range/self.gap)*self.gap
                     else:
                         sd_range = max(self.gap, round(sd_range/self.gap)*self.gap)
 
-                    ce_scrip, pe_scrip = f"{get_strike(ce_scrip) + sd_range}CE", f"{get_strike(pe_scrip) - sd_range}PE"
-                    ce_price, pe_price = self._price_lookup[(current_dt, ce_scrip)], self._price_lookup[(current_dt, pe_scrip)]
-                
+                    if sd < 0:
+                        ce_scrip, pe_scrip = f"{get_strike(ce_scrip) - sd_range}CE", f"{get_strike(pe_scrip) + sd_range}PE"
+                    else:
+                        ce_scrip, pe_scrip = f"{get_strike(ce_scrip) + sd_range}CE", f"{get_strike(pe_scrip) - sd_range}PE"
+
+                elif atm is not None and "ATM" in str(atm).upper():
+                    
+                    atm = str(atm).upper().replace(' ', '')
+                    if atm == "ATM":
+                        pass
+                    elif "%" in str(atm):
+                        pct_val = float(atm.replace("ATM", "").replace("%", ""))
+                        target_value = future_price * (pct_val/100.0)
+                        target_value = round(target_value/self.gap) * self.gap
+                        
+                        ce_scrip = f"{get_strike(ce_scrip) + target_value}CE"
+                        pe_scrip = f"{get_strike(pe_scrip) - target_value}PE"
+                    else:
+                        steps = int(atm.replace("ATM", ""))
+                        target_value = steps*self.gap
+                        
+                        ce_scrip = f"{get_strike(ce_scrip) + target_value}CE"
+                        pe_scrip = f"{get_strike(pe_scrip) - target_value}PE"
+
+                ce_price, pe_price = self._price_lookup[(current_dt, ce_scrip)], self._price_lookup[(current_dt, pe_scrip)]
                 return ce_scrip, pe_scrip, ce_price, pe_price, future_price, current_dt
             except (IndexError, KeyError, ValueError, TypeError):
                 if current_dt.date() != current_date: break
@@ -1628,6 +1650,8 @@ class WeeklyBacktest(IntradayBacktest):
                 print('get_straddle_strike', e)
                 traceback.print_exc()
                 if current_dt.date() != current_date: break
+
+        return None, None, None, None, None, None
 
     def _get_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1, only=None, obove_target_only=False, SDroundoff=False):
         

@@ -29,14 +29,15 @@ class DataEmptyError(Exception):
 def get_pm_time_index(dates, meta_start_time, meta_end_time):
     
     if isinstance(dates, (list, tuple, pd.Series)):
-        time_index = pd.DatetimeIndex([])
+        arrays = []
         for date in dates:
             daily_index = pd.date_range(
                 start=datetime.datetime.combine(date, meta_start_time),
                 end=datetime.datetime.combine(date, meta_end_time),
                 freq='1min'
             )
-            time_index = time_index.append(daily_index)
+            arrays.append(daily_index.values)
+        time_index = pd.DatetimeIndex(np.concatenate(arrays))
     else:
         date = dates
         time_index = pd.date_range(datetime.datetime.combine(date, meta_start_time), datetime.datetime.combine(date, meta_end_time), freq='1min')
@@ -605,13 +606,17 @@ class IntradayBacktest:
 
             if per_minute_mtm:
                 
-                scrip_df.set_index('date_time', inplace=True)
+                dt_vals = scrip_df['date_time'].values
+                close_vals = scrip_df['close'].values
                 if exit_time:
-                    scrip_df = scrip_df.loc[scrip_df.index <= exit_time]
-
-                per_minute_mtm_series = o - scrip_df['close'] if orderside == 'SELL' else scrip_df['close'] - o
-                per_minute_mtm_series = per_minute_mtm_series - slipage
-                per_minute_mtm_series.iloc[-1] = pnl
+                    mtm_mask = dt_vals <= np.datetime64(exit_time, 'ns')
+                    dt_vals = dt_vals[mtm_mask]
+                    close_vals = close_vals[mtm_mask]
+                
+                mtm_vals = (o - close_vals) if orderside == 'SELL' else (close_vals - o)
+                mtm_vals = mtm_vals - slipage
+                mtm_vals[-1] = pnl
+                per_minute_mtm_series = pd.Series(mtm_vals, index=pd.DatetimeIndex(dt_vals))
 
         except DataEmptyError:
             sl_flag, intra_sl_flag, target_flag, exit_time, pnl = False, False, False, '', 0
@@ -722,14 +727,17 @@ class IntradayBacktest:
             pnl = round(pnl - slipage, 2)
 
             if per_minute_mtm:
-                scrip_df = scrip_df.copy()
-                scrip_df.set_index('date_time', inplace=True)
+                dt_vals = scrip_df['date_time'].values
+                close_vals = scrip_df['close'].values
                 if exit_time:
-                    scrip_df = scrip_df.loc[scrip_df.index <= exit_time]
-
-                per_minute_mtm_series = o - scrip_df['close'] if orderside == 'SELL' else scrip_df['close'] - o
-                per_minute_mtm_series = per_minute_mtm_series - slipage
-                per_minute_mtm_series.iloc[-1] = pnl
+                    mtm_mask = dt_vals <= np.datetime64(exit_time, 'ns')
+                    dt_vals = dt_vals[mtm_mask]
+                    close_vals = close_vals[mtm_mask]
+                
+                mtm_vals = (o - close_vals) if orderside == 'SELL' else (close_vals - o)
+                mtm_vals = mtm_vals - slipage
+                mtm_vals[-1] = pnl
+                per_minute_mtm_series = pd.Series(mtm_vals, index=pd.DatetimeIndex(dt_vals))
 
         except DataEmptyError:
             sl_flag, intra_sl_flag, target_flag, exit_time, pnl = False, False, False, '', 0
@@ -840,14 +848,17 @@ class IntradayBacktest:
             pnl = round(pnl - slipage, 2)
 
             if per_minute_mtm:
-                scrip_df = scrip_df.copy()
-                scrip_df.set_index('date_time', inplace=True)
+                dt_vals = scrip_df['date_time'].values
+                close_vals = scrip_df['close'].values
                 if exit_time:
-                    scrip_df = scrip_df.loc[scrip_df.index <= exit_time]
-
-                per_minute_mtm_series = o - scrip_df['close'] if orderside == 'SELL' else scrip_df['close'] - o
-                per_minute_mtm_series = per_minute_mtm_series - slipage
-                per_minute_mtm_series.iloc[-1] = pnl
+                    mtm_mask = dt_vals <= np.datetime64(exit_time, 'ns')
+                    dt_vals = dt_vals[mtm_mask]
+                    close_vals = close_vals[mtm_mask]
+                
+                mtm_vals = (o - close_vals) if orderside == 'SELL' else (close_vals - o)
+                mtm_vals = mtm_vals - slipage
+                mtm_vals[-1] = pnl
+                per_minute_mtm_series = pd.Series(mtm_vals, index=pd.DatetimeIndex(dt_vals))
 
         except DataEmptyError:
             sl_flag, intra_sl_flag, target_flag, exit_time, pnl = False, False, False, '', 0
@@ -1104,14 +1115,17 @@ class IntradayBacktest:
             pnl = round(pnl - slipage, 2)
 
             if per_minute_mtm:
-                scrip_df = scrip_df.copy()
-                scrip_df.set_index('date_time', inplace=True)
+                dt_vals = scrip_df['date_time'].values
+                close_vals = scrip_df['close'].values
                 if exit_time:
-                    scrip_df = scrip_df.loc[scrip_df.index <= exit_time]
-
-                per_minute_mtm_series = o - scrip_df['close'] if orderside == 'SELL' else scrip_df['close'] - o
-                per_minute_mtm_series = per_minute_mtm_series - slipage
-                per_minute_mtm_series.iloc[-1] = pnl
+                    mtm_mask = dt_vals <= np.datetime64(exit_time, 'ns')
+                    dt_vals = dt_vals[mtm_mask]
+                    close_vals = close_vals[mtm_mask]
+                
+                mtm_vals = (o - close_vals) if orderside == 'SELL' else (close_vals - o)
+                mtm_vals = mtm_vals - slipage
+                mtm_vals[-1] = pnl
+                per_minute_mtm_series = pd.Series(mtm_vals, index=pd.DatetimeIndex(dt_vals))
 
         except DataEmptyError:
             sl_flag, trail_flag, exit_time, pnl = False, False, '', 0
@@ -1271,14 +1285,17 @@ class IntradayBacktest:
             pnl = round(pnl - slipage, 2)
 
             if per_minute_mtm:
-                scrip_df = scrip_df.copy()
-                scrip_df.set_index('date_time', inplace=True)
+                dt_vals = scrip_df['date_time'].values
+                close_vals = scrip_df['close'].values
                 if exit_time:
-                    scrip_df = scrip_df.loc[scrip_df.index <= exit_time]
-
-                per_minute_mtm_series = o - scrip_df['close'] if orderside == 'SELL' else scrip_df['close'] - o
-                per_minute_mtm_series = per_minute_mtm_series - slipage
-                per_minute_mtm_series.iloc[-1] = pnl
+                    mtm_mask = dt_vals <= np.datetime64(exit_time, 'ns')
+                    dt_vals = dt_vals[mtm_mask]
+                    close_vals = close_vals[mtm_mask]
+                
+                mtm_vals = (o - close_vals) if orderside == 'SELL' else (close_vals - o)
+                mtm_vals = mtm_vals - slipage
+                mtm_vals[-1] = pnl
+                per_minute_mtm_series = pd.Series(mtm_vals, index=pd.DatetimeIndex(dt_vals))
 
         except DataEmptyError:
             sl_flag, intra_sl_flag, trail_flag, exit_time, pnl = False, False, False, '', 0
@@ -1772,13 +1789,17 @@ class WeeklyBacktest(IntradayBacktest):
 
             if per_minute_mtm:
                 
-                scrip_df.set_index('date_time', inplace=True)
+                dt_vals = scrip_df['date_time'].values
+                close_vals = scrip_df['close'].values
                 if exit_time:
-                    scrip_df = scrip_df.loc[scrip_df.index <= exit_time]
-
-                per_minute_mtm_series = o - scrip_df['close'] if orderside == 'SELL' else scrip_df['close'] - o
-                per_minute_mtm_series = per_minute_mtm_series - slipage
-                per_minute_mtm_series.iloc[-1] = pnl
+                    mtm_mask = dt_vals <= np.datetime64(exit_time, 'ns')
+                    dt_vals = dt_vals[mtm_mask]
+                    close_vals = close_vals[mtm_mask]
+                
+                mtm_vals = (o - close_vals) if orderside == 'SELL' else (close_vals - o)
+                mtm_vals = mtm_vals - slipage
+                mtm_vals[-1] = pnl
+                per_minute_mtm_series = pd.Series(mtm_vals, index=pd.DatetimeIndex(dt_vals))
 
         except DataEmptyError:
             sl_flag, intra_sl_flag, target_flag, exit_time, pnl = False, False, False, '', 0
@@ -1889,13 +1910,17 @@ class WeeklyBacktest(IntradayBacktest):
 
             if per_minute_mtm:
                 
-                scrip_df.set_index('date_time', inplace=True)
+                dt_vals = scrip_df['date_time'].values
+                close_vals = scrip_df['close'].values
                 if exit_time:
-                    scrip_df = scrip_df.loc[scrip_df.index <= exit_time]
-
-                per_minute_mtm_series = o - scrip_df['close'] if orderside == 'SELL' else scrip_df['close'] - o
-                per_minute_mtm_series = per_minute_mtm_series - slipage
-                per_minute_mtm_series.iloc[-1] = pnl
+                    mtm_mask = dt_vals <= np.datetime64(exit_time, 'ns')
+                    dt_vals = dt_vals[mtm_mask]
+                    close_vals = close_vals[mtm_mask]
+                
+                mtm_vals = (o - close_vals) if orderside == 'SELL' else (close_vals - o)
+                mtm_vals = mtm_vals - slipage
+                mtm_vals[-1] = pnl
+                per_minute_mtm_series = pd.Series(mtm_vals, index=pd.DatetimeIndex(dt_vals))
 
         except DataEmptyError:
             sl_flag, intra_sl_flag, target_flag, exit_time, pnl = False, False, False, '', 0
@@ -2006,13 +2031,17 @@ class WeeklyBacktest(IntradayBacktest):
 
             if per_minute_mtm:
                 
-                scrip_df.set_index('date_time', inplace=True)
+                dt_vals = scrip_df['date_time'].values
+                close_vals = scrip_df['close'].values
                 if exit_time:
-                    scrip_df = scrip_df.loc[scrip_df.index <= exit_time]
-
-                per_minute_mtm_series = o - scrip_df['close'] if orderside == 'SELL' else scrip_df['close'] - o
-                per_minute_mtm_series = per_minute_mtm_series - slipage
-                per_minute_mtm_series.iloc[-1] = pnl
+                    mtm_mask = dt_vals <= np.datetime64(exit_time, 'ns')
+                    dt_vals = dt_vals[mtm_mask]
+                    close_vals = close_vals[mtm_mask]
+                
+                mtm_vals = (o - close_vals) if orderside == 'SELL' else (close_vals - o)
+                mtm_vals = mtm_vals - slipage
+                mtm_vals[-1] = pnl
+                per_minute_mtm_series = pd.Series(mtm_vals, index=pd.DatetimeIndex(dt_vals))
 
         except DataEmptyError:
             sl_flag, intra_sl_flag, target_flag, exit_time, pnl = False, False, False, '', 0
@@ -2047,7 +2076,7 @@ class WeeklyBacktest(IntradayBacktest):
         day_wise_mtm, day_wise_mtm2 = {}, {}
 
         try:
-            scrip_df = self.get_straddle_data(start_dt, end_dt, ce_scrip, pe_scrip).copy()
+            scrip_df = self.get_straddle_data(start_dt, end_dt, ce_scrip, pe_scrip)
             if scrip_df.empty: raise DataEmptyError
             
             o = scrip_df['close'].iloc[0]
@@ -2122,13 +2151,17 @@ class WeeklyBacktest(IntradayBacktest):
 
             if per_minute_mtm:
                 
-                scrip_df.set_index('date_time', inplace=True)
+                dt_vals = scrip_df['date_time'].values
+                close_vals = scrip_df['close'].values
                 if exit_time:
-                    scrip_df = scrip_df.loc[scrip_df.index <= exit_time]
-
-                per_minute_mtm_series = o - scrip_df['close'] if orderside == 'SELL' else scrip_df['close'] - o
-                per_minute_mtm_series = per_minute_mtm_series - slipage
-                per_minute_mtm_series.iloc[-1] = pnl
+                    mtm_mask = dt_vals <= np.datetime64(exit_time, 'ns')
+                    dt_vals = dt_vals[mtm_mask]
+                    close_vals = close_vals[mtm_mask]
+                
+                mtm_vals = (o - close_vals) if orderside == 'SELL' else (close_vals - o)
+                mtm_vals = mtm_vals - slipage
+                mtm_vals[-1] = pnl
+                per_minute_mtm_series = pd.Series(mtm_vals, index=pd.DatetimeIndex(dt_vals))
 
         except DataEmptyError:
             sl_flag, intra_sl_flag, exit_time, pnl = False, False, '', 0
@@ -2166,7 +2199,7 @@ class WeeklyBacktest(IntradayBacktest):
         day_wise_mtm, day_wise_mtm2 = {}, {}
 
         try:
-            scrip_df = self.get_straddle_data(start_dt, end_dt, ce_scrip, pe_scrip).copy()
+            scrip_df = self.get_straddle_data(start_dt, end_dt, ce_scrip, pe_scrip)
             if scrip_df.empty: raise DataEmptyError
             
             o = scrip_df['close'].iloc[0]
@@ -2247,13 +2280,17 @@ class WeeklyBacktest(IntradayBacktest):
 
             if per_minute_mtm:
                 
-                scrip_df.set_index('date_time', inplace=True)
+                dt_vals = scrip_df['date_time'].values
+                close_vals = scrip_df['close'].values
                 if exit_time:
-                    scrip_df = scrip_df.loc[scrip_df.index <= exit_time]
-
-                per_minute_mtm_series = o - scrip_df['close'] if orderside == 'SELL' else scrip_df['close'] - o
-                per_minute_mtm_series = per_minute_mtm_series - slipage
-                per_minute_mtm_series.iloc[-1] = pnl
+                    mtm_mask = dt_vals <= np.datetime64(exit_time, 'ns')
+                    dt_vals = dt_vals[mtm_mask]
+                    close_vals = close_vals[mtm_mask]
+                
+                mtm_vals = (o - close_vals) if orderside == 'SELL' else (close_vals - o)
+                mtm_vals = mtm_vals - slipage
+                mtm_vals[-1] = pnl
+                per_minute_mtm_series = pd.Series(mtm_vals, index=pd.DatetimeIndex(dt_vals))
 
         except DataEmptyError:
             sl_flag, intra_sl_flag, exit_time, pnl = False, False, '', 0

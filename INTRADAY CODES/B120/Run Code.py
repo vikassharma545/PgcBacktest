@@ -18,6 +18,7 @@ import concurrent.futures
 import pyarrow.parquet as pq
 from tkinter import Tk, filedialog
 from nbconvert import PythonExporter
+from inputimeout import inputimeout, TimeoutOccurred
 
 from pgcbacktest.BtParameters import *
 from pgcbacktest.BacktestOptions import *
@@ -488,6 +489,27 @@ if __name__ == "__main__":
     print(f"Scale up when CPU < {cpu_config['scale_up_threshold']}%")
     print(f"Stop scaling when CPU > {cpu_config['scale_up_ceiling']}%")
 
+    ### Ask user for initial terminal count (3 second timeout)
+    auto_initial = min(cpu_config['initial'], total_pending_dates)
+    try:
+        user_input = inputimeout(
+            prompt=f"\nEnter number of initial terminals (default={auto_initial}, 3s timeout): ",
+            timeout=3
+        )
+        user_count = int(user_input.strip())
+        if user_count < 1:
+            print("Invalid number, using auto-detect.")
+            initial_count = auto_initial
+        else:
+            initial_count = min(user_count, total_pending_dates)
+            print(f"Using user-specified: {initial_count} terminals")
+    except TimeoutOccurred:
+        print(f"\nNo input received, using auto-detect: {auto_initial} terminals")
+        initial_count = auto_initial
+    except ValueError:
+        print("Invalid input, using auto-detect.")
+        initial_count = auto_initial
+
     ### Get run rows to check if anything to run
     run_rows = [idx for idx in range(len(meta_data)) if meta_data.loc[idx, 'run']]
 
@@ -536,7 +558,6 @@ if __name__ == "__main__":
         print("No rows to run!")
         sys.exit()
     
-    initial_count = min(cpu_config['initial'], total_pending_dates)
     print(f'\nLaunching {initial_count} terminals ({total_pending_dates} pending)...\n')
     
     processes = []

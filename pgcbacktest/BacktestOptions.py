@@ -306,8 +306,8 @@ class IntradayBacktest:
         pe_dt = pe_data['date_time'].values
         common_dt = np.intersect1d(ce_dt, pe_dt)
         
-        ce_mask = np.in1d(ce_dt, common_dt)
-        pe_mask = np.in1d(pe_dt, common_dt)
+        ce_mask = np.isin(ce_dt, common_dt)
+        pe_mask = np.isin(pe_dt, common_dt)
         ce_data = ce_data[ce_mask]
         pe_data = pe_data[pe_mask]
         

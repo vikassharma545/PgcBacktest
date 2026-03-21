@@ -278,7 +278,7 @@ if not os.path.exists(folder_path):
     st.stop()
 
 parquet_files = get_parquet_files(folder_path)
-dashboard_metadata = pickle.load(open(Path(folder_path) / "Metadata.pickle", "rb"))
+dashboard_metadata = pickle.load(open(Path(folder_path) / "MetaData.pickle", "rb"))
 if not parquet_files:
     st.warning("No Parquet files found in the provided folder path.")
     st.stop()

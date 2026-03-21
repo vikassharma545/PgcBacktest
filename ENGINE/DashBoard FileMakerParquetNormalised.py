@@ -222,11 +222,21 @@ if __name__ == "__main__":
         sys.exit(0)
     print("All Parquet files are valid.\n")
     
-    if input("Proceed with execution? (y/n): ").strip().lower() != 'y':
+    try:
+        NV = float(input("\nEnter NV (Normalisation Value e.g. 17): ").strip())
+        if NV <= 0:
+            raise ValueError
+    except (ValueError, EOFError):
+        print("Invalid NV value. Exiting...")
+        input("Press Enter to Exit !!!")
+        sys.exit(0)
+    print(f"NV = {NV}")
+
+    if input("\nProceed with execution? (y/n): ").strip().lower() != 'y':
         print('❌ Execution cancelled.')
         sleep(2)
         sys.exit(0)
-        
+
     max_row = 500000
     dashboard_folder_path = parquet_files_folder_path.parent / f"{code}_dashboard"
     print(f"\nDashBoard Files Folder Path: {dashboard_folder_path}\n")
@@ -258,7 +268,6 @@ if __name__ == "__main__":
                     chunks_file = [f for f in grouped_parquet[key] if f.stem.split()[-1] == chunk]
                     
                     def read_and_cast(path):
-                        NV = 17  # set your NV value
                         df = pl.read_parquet(path, columns=(name_columns + pnl_columns + ["Future"]))
                         return df.with_columns([
                             pl.col(name_columns).cast(pl.Utf8).cast(pl.Categorical),

@@ -32,6 +32,11 @@ def select_file_gui(title="Select a File", filetypes=None) -> Path | None:
     return Path(file_path) if file_path else None
 
 def sort_mixed_list(values):
+
+    MONTH_ORDER = {'January':1,'February':2,'March':3,'April':4,'May':5,'June':6,'July':7,'August':8,'September':9,'October':10,'November':11,'December':12}
+    if list(values) and all(str(v) in MONTH_ORDER for v in values):
+        return sorted(values, key=lambda x: MONTH_ORDER[str(x)])
+
     def parse_value(value):
         val_str = str(value)
         match = re.match(r"^(-?\d+\.\d+|-?\d+)([.a-zA-Z%]*)$", val_str)
@@ -63,17 +68,17 @@ def get_code_index_cols(dashboard_metadata):
 def mapping_dashboard_files(parquet_files, code_type):
     data = []
     if code_type == 'Intraday':
-        columns = ['Index', 'Year', 'Day', 'DTE', 'PL Basis', 'FilePath']
+        columns = ['Index', 'Year', 'Month', 'DTE', 'PL Basis', 'FilePath']
         for file in parquet_files:
             parts = file.stem.replace('--', '-@').split('-')
             parts = [p.replace('@', '-') for p in parts]
             data.append([file.parts[-2], int(parts[1]), parts[2], float(parts[3]), parts[4], file.as_posix()])
     elif code_type == 'Weekly':
-        columns = ['Index', 'Year', 'Start.DTE-End.DTE', 'PL Basis', 'FilePath']
+        columns = ['Index', 'Year', 'Month', 'Start.DTE-End.DTE', 'PL Basis', 'FilePath']
         for file in parquet_files:
             parts = file.stem.replace('--', '-@').split('-')
             parts = [p.replace('@', '-') for p in parts]
-            data.append([file.parts[-2], int(parts[1]), parts[2], parts[3], file.as_posix()])
+            data.append([file.parts[-2], int(parts[1]), parts[2], parts[3], parts[4], file.as_posix()])
     return pd.DataFrame(data, columns=columns)
 
 def load_and_filter_data(filtered_parquet_files, filter_conditions, top_level_filter_col):
@@ -336,9 +341,9 @@ for column in filter_columns:
     unique_values = sort_mixed_list(dashboard_metadata[column])
     if len(unique_values) > 1:
         if code_type == 'Intraday':
-            default_values = [unique_values[0]] if column not in ['Year', 'Day', 'DTE'] else unique_values
+            default_values = [unique_values[0]] if column not in ['Year', 'Month', 'DTE'] else unique_values
         elif code_type == 'Weekly':
-            default_values = [unique_values[0]] if column not in ['Year', 'Start.DTE-End.DTE'] else unique_values
+            default_values = [unique_values[0]] if column not in ['Year', 'Month', 'Start.DTE-End.DTE'] else unique_values
         filter_data[column] = (unique_values, default_values)
 
 filter_keys = list(filter_data.keys())
@@ -359,9 +364,9 @@ for row_start in range(0, len(filter_keys), cols_per_row):
 # ─────────────────────────────────────────────
 
 if code_type == 'Intraday':
-    top_level_filter_col = ['Index', 'Year', 'Day', 'DTE', 'PL Basis']
+    top_level_filter_col = ['Index', 'Year', 'Month', 'DTE', 'PL Basis']
 elif code_type == 'Weekly':
-    top_level_filter_col = ['Index', 'Year', 'Start.DTE-End.DTE', 'PL Basis']
+    top_level_filter_col = ['Index', 'Year', 'Month', 'Start.DTE-End.DTE', 'PL Basis']
     
 temp_df = mapping_dashboard_files_df.copy()
 for column in name_columns:

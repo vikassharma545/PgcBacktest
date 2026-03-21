@@ -126,28 +126,29 @@ def grouping_parquet_files(parquet_files, dte_file, code_type="Intraday/Weekly")
 
     if code_type == "Intraday":
 
-        year_day_dte_files = {}
+        year_month_dte_files = {}
         for file in parquet_files:
             index = file.stem.split()[0]
             date = datetime.datetime.strptime(file.stem.split()[1], "%Y-%m-%d")
             year = date.year
-            day = date.strftime('%A')
+            month = date.strftime('%B')
             dte = dte_file.loc[date, index]
-            year_day_dte_files[f'{index}-{year}-{day}-{dte}'] = year_day_dte_files.get(f'{index}-{year}-{day}-{dte}', []) + [file]
+            year_month_dte_files[f'{index}-{year}-{month}-{dte}'] = year_month_dte_files.get(f'{index}-{year}-{month}-{dte}', []) + [file]
 
-        return year_day_dte_files
+        return year_month_dte_files
 
     elif code_type == "Weekly":
 
-        year_dte_files = {}
+        year_month_dte_files = {}
         for file in parquet_files:
             index = file.stem.split()[0]
             date = datetime.datetime.strptime(file.stem.split()[1], "%Y-%m-%d")
             year = date.year
+            month = date.strftime('%B')
             dte = file.stem.split()[3].replace('-', '_')
-            year_dte_files[f'{index}-{year}-{dte}'] = year_dte_files.get(f'{index}-{year}-{dte}', []) + [file]
+            year_month_dte_files[f'{index}-{year}-{month}-{dte}'] = year_month_dte_files.get(f'{index}-{year}-{month}-{dte}', []) + [file]
 
-        return year_dte_files
+        return year_month_dte_files
     
     else:
         raise ValueError("Invalid code_type. Must be 'Intraday' or 'Weekly'.")
@@ -244,10 +245,7 @@ if __name__ == "__main__":
 
             for key, value in grouped_parquet.items():
 
-                if code_type == 'Intraday':
-                    check_index, year, day, dte = key.split('-')
-                elif code_type == 'Weekly':
-                    check_index, year, dte = key.split('-')
+                check_index, year, month, dte = key.split('-')
 
                 if check_index != index: continue
 
@@ -255,10 +253,7 @@ if __name__ == "__main__":
                 chunks = sorted(set([f.stem.split()[-1] for f in grouped_parquet[key]]), key=lambda x: int(x.split('-')[-1]))
                 for chunk in chunks:
 
-                    if code_type == 'Intraday':
-                        print(index, year, day, dte, chunk)
-                    elif code_type == 'Weekly':
-                        print(index, year, dte, chunk)
+                    print(index, year, month, dte, chunk)
 
                     chunks_file = [f for f in grouped_parquet[key] if f.stem.split()[-1] == chunk]
 
@@ -281,12 +276,13 @@ if __name__ == "__main__":
                     if code_type == 'Intraday':
                         data = data.with_columns([
                             pl.lit(int(year)).cast(pl.Int16).alias("Year"),
-                            pl.lit(day).cast(pl.Categorical).alias("Day"),
+                            pl.lit(month).cast(pl.Categorical).alias("Month"),
                             pl.lit(int(float(dte))).cast(pl.Int8).alias("DTE")
                         ])
                     elif code_type == 'Weekly':
                         data = data.with_columns([
                             pl.lit(int(year)).cast(pl.Int16).alias("Year"),
+                            pl.lit(month).cast(pl.Categorical).alias("Month"),
                             pl.lit(dte).cast(pl.Categorical).alias("Start.DTE-End.DTE")
                         ])
                     
@@ -307,9 +303,9 @@ if __name__ == "__main__":
                     for idx, i in enumerate(range(0, len(pnl_data), chunk_size), start=1):
                         chunk_data = pnl_data.slice(i, chunk_size)
                         if code_type == 'Intraday':
-                            chunk_data.write_parquet(f"{dashboard_folder_path}/{index}/{code}-{year}-{day}-{dte}-{pnl_col}-No-{idx}.parquet")
+                            chunk_data.write_parquet(f"{dashboard_folder_path}/{index}/{code}-{year}-{month}-{dte}-{pnl_col}-No-{idx}.parquet")
                         elif code_type == 'Weekly':
-                            chunk_data.write_parquet(f"{dashboard_folder_path}/{index}/{code}-{year}-{dte}-{pnl_col}-No-{idx}.parquet")
+                            chunk_data.write_parquet(f"{dashboard_folder_path}/{index}/{code}-{year}-{month}-{dte}-{pnl_col}-No-{idx}.parquet")
 
         except Exception as e:
             input(f"ERROR !!! {e}")

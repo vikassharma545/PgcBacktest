@@ -6,6 +6,7 @@ import time
 import ctypes
 import psutil
 import pickle
+import hashlib
 import nbformat
 import tempfile
 import fileinput
@@ -22,6 +23,10 @@ from inputimeout import inputimeout, TimeoutOccurred
 
 from pgcbacktest.BtParameters import *
 from pgcbacktest.BacktestOptions import *
+
+def get_run_uid(notebook_path):
+    """Short unique ID from notebook's full path — prevents temp file collision."""
+    return hashlib.md5(str(notebook_path.resolve()).encode()).hexdigest()[:8]
 
 def get_sleep_config(parameter_len):
     """Dynamic sleep/timer values based on parameter size."""
@@ -204,7 +209,8 @@ def convert_notebook_to_script(pickle_path: Path, notebook_path: Path, parameter
     with open(notebook_path, 'r', encoding='utf-8') as nb_file:
         nb_content = nbformat.read(nb_file, as_version=4)
         
-    run_scrip_path = Path(tempfile.gettempdir()) / f"{notebook_path.stem}.py"
+    run_uid = get_run_uid(notebook_path)
+    run_scrip_path = Path(tempfile.gettempdir()) / f"{notebook_path.stem}_{run_uid}.py"
 
     for cell_idx, cell in enumerate(nb_content['cells']):
         if (cell['cell_type'] == 'code') and ("pickle_path" in cell['source']) and ("parameter_path" in cell['source']) and ("meta_data_path" in cell['source']):
@@ -315,8 +321,8 @@ def get_file_details(meta_data, pickle_path, notebook_path, output_csv_path, cod
     index_dates = {}
     total_dates, total_pending_dates = 0, 0
     dir_files = set(os.listdir(output_csv_path)) if os.path.exists(output_csv_path) else set()
-    dir_pickle_path = Path(tempfile.gettempdir()) / f"{notebook_path.stem}_dir.pkl"
-    
+    run_uid = get_run_uid(notebook_path)
+    dir_pickle_path = Path(tempfile.gettempdir()) / f"{notebook_path.stem}_{run_uid}_dir.pkl"
     if include_rar:
         rar_files = set()
         output_dir_name = os.path.dirname(output_csv_path)
@@ -444,6 +450,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     code, output_csv_path, run_scrip_path = convert_notebook_to_script(pickle_path, notebook_path, parameter_path, meta_data_path)
+    run_uid = get_run_uid(notebook_path)
 
     parameter_len = get_len_of_parameter_data(code, parameter_path)
     meta_data, _ = get_meta_data(code, meta_data_path)
@@ -521,7 +528,7 @@ if __name__ == "__main__":
         print(f"  Launching {label}")
         
         if sys.platform == 'linux':
-            pid_file = Path(tempfile.gettempdir()) / f"proc_{code}_{label}.pid"
+            pid_file = Path(tempfile.gettempdir()) / f"proc_{code}_{run_uid}_{label}.pid"
             cmd = f"echo $$ > {pid_file}; exec {sys.executable} '{run_scrip_path}'"
             proc = subprocess.Popen(["gnome-terminal", "--", "bash", "-c", cmd], start_new_session=True)
             

@@ -1,11 +1,11 @@
 import os
 import re
+import sys
 import duckdb
 import pickle
 import tempfile
 import pandas as pd
 import polars as pl
-import xlwings as xw
 import streamlit as st
 from pathlib import Path
 from natsort import natsorted
@@ -20,16 +20,6 @@ def select_folder_gui(title="Select a Folder") -> Path | None:
     folder_path = filedialog.askdirectory(title=title, parent=root)
     root.destroy() 
     return Path(folder_path) if folder_path else None
-
-def select_file_gui(title="Select a File", filetypes=None) -> Path | None:
-    if filetypes is None:
-        filetypes = [("All files", "*.*")]
-    root = Tk()
-    root.withdraw()
-    root.attributes('-topmost', True)
-    file_path = filedialog.askopenfilename(title=title, filetypes=filetypes, parent=root)
-    root.destroy()
-    return Path(file_path) if file_path else None
 
 def sort_mixed_list(values):
 
@@ -55,7 +45,6 @@ def get_parquet_files(folder_path):
     iterator = root.rglob("*.parquet")
     return sorted(iterator)
 
-@st.cache_data
 def get_code_index_cols(dashboard_metadata):    
     code_type = dashboard_metadata['CodeType']
     code = dashboard_metadata['Strategy']
@@ -81,11 +70,15 @@ def mapping_dashboard_files(parquet_files, code_type):
             data.append([file.parts[-2], int(parts[1]), parts[2], parts[3], parts[4], file.as_posix()])
     return pd.DataFrame(data, columns=columns)
 
-def load_and_filter_data(filtered_parquet_files, filter_conditions, top_level_filter_col):
+@st.cache_data
+def load_and_filter_data(filtered_parquet_files, filter_conditions_tuple, top_level_filter_col_tuple):
     import time
     start_time = time.time()
     if not filtered_parquet_files:
         return pl.DataFrame(), 0
+    
+    filter_conditions = dict(filter_conditions_tuple)
+    top_level_filter_col = list(top_level_filter_col_tuple)
     
     conn = duckdb.connect(':memory:')
     conditions = []
@@ -95,7 +88,7 @@ def load_and_filter_data(filtered_parquet_files, filter_conditions, top_level_fi
             conditions.append(f'"{col}" IN ({val_str})')
             
     where_sql = " AND ".join(conditions) if conditions else "1=1"
-    query = f"SELECT * FROM read_parquet({filtered_parquet_files}) WHERE {where_sql}"
+    query = f"SELECT * FROM read_parquet({list(filtered_parquet_files)}) WHERE {where_sql}"
     filtered_data = conn.execute(query).pl()
     conn.close()
     
@@ -278,7 +271,8 @@ if not os.path.exists(folder_path):
     st.stop()
 
 parquet_files = get_parquet_files(folder_path)
-dashboard_metadata = pickle.load(open(Path(folder_path) / "MetaData.pickle", "rb"))
+with open(Path(folder_path) / "MetaData.pickle", "rb") as f:
+    dashboard_metadata = pickle.load(f)
 if not parquet_files:
     st.warning("No Parquet files found in the provided folder path.")
     st.stop()
@@ -323,11 +317,11 @@ st.write("### HeatMap Builder 🔧")
 ax1, ax2 = st.columns(2, vertical_alignment="bottom")
 with ax1:
     st.markdown('<div class="slicer-box"><div class="slicer-header">Select HeatMap Index</div><div class="slicer-body">', unsafe_allow_html=True)
-    pivot_index = st.selectbox("Row", options=name_columns, index=name_columns.index('StartTime'), label_visibility="collapsed")
+    pivot_index = st.selectbox("Row", options=name_columns, index=name_columns.index('StartTime') if 'StartTime' in name_columns else 0, label_visibility="collapsed")
     st.markdown('</div></div>', unsafe_allow_html=True)
 with ax2:
     st.markdown('<div class="slicer-box"><div class="slicer-header">Select HeatMap Column</div><div class="slicer-body">', unsafe_allow_html=True)
-    pivot_column = st.selectbox("Col", options=name_columns, index=name_columns.index('EndTime'), label_visibility="collapsed")
+    pivot_column = st.selectbox("Col", options=name_columns, index=name_columns.index('EndTime') if 'EndTime' in name_columns else min(1, len(name_columns) - 1), label_visibility="collapsed")
     st.markdown('</div></div>', unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
@@ -363,6 +357,10 @@ for row_start in range(0, len(filter_keys), cols_per_row):
 #  Results & Excel Output (Instantly Executes)
 # ─────────────────────────────────────────────
 
+if pivot_index == pivot_column:
+    st.warning("⚠️ Row and Column cannot be the same. Please select different axes.")
+    st.stop()
+
 if code_type == 'Intraday':
     top_level_filter_col = ['Index', 'Year', 'Month', 'DTE', 'PL Basis']
 elif code_type == 'Weekly':
@@ -379,8 +377,16 @@ r1, r2 = st.columns(2)
 with r1:
     st.markdown(f'<div class="sb sb-blue">📁 &nbsp;<b>Total Files matching filters:</b> {len(filtered_parquet_files)}</div>', unsafe_allow_html=True)
 
+if not filtered_parquet_files:
+    st.warning("No files match the selected filters.")
+    st.stop()
+
+# Convert to hashable types for st.cache_data
+filter_tuple = tuple((k, tuple(v) if v else ()) for k, v in filtered_dict.items())
+files_tuple = tuple(filtered_parquet_files)
+
 with st.spinner("Calculating..."):
-    filtered_data, load_time = load_and_filter_data(filtered_parquet_files, filtered_dict, top_level_filter_col)
+    filtered_data, load_time = load_and_filter_data(files_tuple, filter_tuple, tuple(top_level_filter_col))
 
 with r2:
     st.markdown(f'<div class="sb">✅ &nbsp;Data loaded in <b>{load_time:.2f} seconds</b> ({len(filtered_data):,} rows)</div>', unsafe_allow_html=True)
@@ -392,125 +398,134 @@ if len(filtered_data) == 0:
 filtered_data = filtered_data.group_by([pivot_index, pivot_column]).agg(pl.col("Points").sum())
 pivot = filtered_data.to_pandas().set_index([pivot_index, pivot_column]).unstack(fill_value=0).round(0)
 
+if pivot.empty:
+    st.warning("Pivot table is empty — no data for this Row × Column combination.")
+    st.stop()
+
 pivot = pivot.reindex(sort_mixed_list(pivot.index))
 pivot.columns = [x[1] for x in pivot.columns]
 pivot = pivot[sort_mixed_list(pivot.columns)]
 
-agg_func = 'sum'
-x_value = pivot.columns.astype(str)
-y_value = pivot.index.astype(str)
+# ─────────────────────────────────────────────
+#  Excel Output (Windows only — xlwings needs COM)
+# ─────────────────────────────────────────────
 
-file_name = f"{code}.xlsx"
-file_path = Path(tempfile.gettempdir()) / f"{code}.xlsx"
-wb = None
+if sys.platform == 'win32':
+    import xlwings as xw
 
-# --- ATTEMPT 1: Connect to Existing Open File ---
-try:
-    wb = xw.books[file_name]
-except Exception:
-    pass 
+    file_name = f"{code}.xlsx"
+    file_path = Path(tempfile.gettempdir()) / f"{code}.xlsx"
+    wb = None
 
-# --- ATTEMPT 2: Open File (Standard) ---
-if wb is None:
+    # --- ATTEMPT 1: Connect to Existing Open File ---
     try:
-        if os.path.exists(file_path):
-            wb = xw.Book(file_path)
-        else:
-            wb = xw.Book()
-            wb.save(file_path)
+        wb = xw.books[file_name]
     except Exception:
-        # --- ATTEMPT 3: The Fix for "Unknown name" / COM Errors ---
+        pass 
+
+    # --- ATTEMPT 2: Open File (Standard) ---
+    if wb is None:
         try:
-            new_app = xw.App(visible=True) 
             if os.path.exists(file_path):
-                wb = new_app.books.open(file_path)
+                wb = xw.Book(file_path)
             else:
-                wb = new_app.books.add()
+                wb = xw.Book()
                 wb.save(file_path)
-        except Exception as e:
-            st.error(f"❌ Fatal Excel Error: Unable to start Excel. Please close all Excel instances and try again. Error: {e}")
+        except Exception:
+            # --- ATTEMPT 3: The Fix for "Unknown name" / COM Errors ---
+            try:
+                new_app = xw.App(visible=True) 
+                if os.path.exists(file_path):
+                    wb = new_app.books.open(file_path)
+                else:
+                    wb = new_app.books.add()
+                    wb.save(file_path)
+            except Exception as e:
+                st.error(f"❌ Fatal Excel Error: Unable to start Excel. Please close all Excel instances and try again. Error: {e}")
 
-# --- PROCEED IF WORKBOOK EXISTS ---
-if wb:
-    sheet_name = "dashboard"
-    try:
-        sheet = wb.sheets[sheet_name]
-    except Exception:
-        sheet = wb.sheets.add(sheet_name)
+    # --- PROCEED IF WORKBOOK EXISTS ---
+    if wb:
+        sheet_name = "dashboard"
+        try:
+            sheet = wb.sheets[sheet_name]
+        except Exception:
+            sheet = wb.sheets.add(sheet_name)
 
-    sheet.clear()
+        sheet.clear()
 
-    df_styled = pivot.copy()
-    df_styled['Grand Total'] = df_styled.sum(axis=1)
-    sum_row = df_styled.sum(axis=0)
-    df_styled.loc['Grand Total'] = sum_row
-    
-    b1_cell = sheet.range("B1")
-    b1_cell.value = pivot_column
-    b1_cell.api.Font.Bold = True
-    b1_cell.color = (220, 230, 241)
-    b1_cell.api.Borders.LineStyle = 1
-
-    start_cell = sheet.range("A2")
-    start_cell.value = df_styled
-
-    full_tbl = start_cell.expand()
-    last_row = full_tbl.last_cell.row
-    last_col = full_tbl.last_cell.column
-    
-    header_rng = sheet.range((start_cell.row, start_cell.column), (start_cell.row, last_col))
-    header_rng.api.Font.Bold = True
-    header_rng.color = (220, 230, 241)
-    header_rng.api.Borders(8).LineStyle = 1  
-    header_rng.api.Borders(9).LineStyle = 1 
-    
-    index_rng = sheet.range((start_cell.row + 1, start_cell.column), (last_row, start_cell.column))
-    index_rng.api.Font.Bold = True
-    index_rng.api.Borders(10).LineStyle = 1 
-
-    bottom_rng = sheet.range((last_row, start_cell.column), (last_row, last_col))
-    bottom_rng.api.Font.Bold = True
-    bottom_rng.color = (220, 230, 241)
-    bottom_rng.api.Borders(8).LineStyle = 1  
-    bottom_rng.api.Borders(9).LineStyle = 1 
-
-    right_rng = sheet.range((start_cell.row, last_col), (last_row, last_col))
-    right_rng.api.Font.Bold = True
-    right_rng.api.Borders(7).LineStyle = 1 
-    right_rng.api.Borders(10).LineStyle = 1 
-    
-    data_rng = sheet.range((start_cell.row + 1, start_cell.column + 1), (last_row, last_col))
-    data_rng.number_format = "#,##0" 
-
-    data_rng = sheet.range((start_cell.row + 1, start_cell.column + 1), (last_row-1, last_col-1))
-    data_rng.api.FormatConditions.Delete()
-    cs = data_rng.api.FormatConditions.AddColorScale(3) 
-    
-    merged_filters = filtered_dict.copy()
-
-    if merged_filters:
-        param_df = pd.DataFrame(dict([(k, pd.Series(v)) for k, v in merged_filters.items()]))
-        param_df = param_df.fillna("")  
-
-        param_col_idx = last_col + 2
-        param_anchor = sheet.range((start_cell.row, param_col_idx))
-        param_anchor.options(index=False).value = param_df
+        df_styled = pivot.copy()
+        df_styled['Grand Total'] = df_styled.sum(axis=1)
+        sum_row = df_styled.sum(axis=0)
+        df_styled.loc['Grand Total'] = sum_row
         
-        n_rows = param_df.shape[0] + 1  
-        n_cols = param_df.shape[1]
+        b1_cell = sheet.range("B1")
+        b1_cell.value = pivot_column
+        b1_cell.api.Font.Bold = True
+        b1_cell.color = (220, 230, 241)
+        b1_cell.api.Borders.LineStyle = 1
+
+        start_cell = sheet.range("A2")
+        start_cell.value = df_styled
+
+        full_tbl = start_cell.expand()
+        last_row = full_tbl.last_cell.row
+        last_col = full_tbl.last_cell.column
         
-        param_tbl = sheet.range(
-            (param_anchor.row, param_anchor.column),
-            (param_anchor.row + n_rows - 1, param_anchor.column + n_cols - 1)
-        )
-                            
-        p_headers = sheet.range((param_anchor.row, param_anchor.column), (param_anchor.row, param_tbl.last_cell.column))
-        p_headers.api.Font.Bold = True
-        p_headers.color = (255, 235, 156) 
-        p_headers.api.Borders.LineStyle = 1 
+        header_rng = sheet.range((start_cell.row, start_cell.column), (start_cell.row, last_col))
+        header_rng.api.Font.Bold = True
+        header_rng.color = (220, 230, 241)
+        header_rng.api.Borders(8).LineStyle = 1  
+        header_rng.api.Borders(9).LineStyle = 1 
         
-        param_tbl.api.Borders.LineStyle = 1 
-        param_tbl.api.HorizontalAlignment = -4108 
+        index_rng = sheet.range((start_cell.row + 1, start_cell.column), (last_row, start_cell.column))
+        index_rng.api.Font.Bold = True
+        index_rng.api.Borders(10).LineStyle = 1 
+
+        bottom_rng = sheet.range((last_row, start_cell.column), (last_row, last_col))
+        bottom_rng.api.Font.Bold = True
+        bottom_rng.color = (220, 230, 241)
+        bottom_rng.api.Borders(8).LineStyle = 1  
+        bottom_rng.api.Borders(9).LineStyle = 1 
+
+        right_rng = sheet.range((start_cell.row, last_col), (last_row, last_col))
+        right_rng.api.Font.Bold = True
+        right_rng.api.Borders(7).LineStyle = 1 
+        right_rng.api.Borders(10).LineStyle = 1 
         
-    sheet.used_range.columns.autofit()
-    st.toast("✅ Excel Updated with Heatmap & Filter Parameters!")
+        data_rng = sheet.range((start_cell.row + 1, start_cell.column + 1), (last_row, last_col))
+        data_rng.number_format = "#,##0" 
+
+        data_rng = sheet.range((start_cell.row + 1, start_cell.column + 1), (last_row-1, last_col-1))
+        data_rng.api.FormatConditions.Delete()
+        data_rng.api.FormatConditions.AddColorScale(3) 
+        
+        merged_filters = filtered_dict.copy()
+
+        if merged_filters:
+            param_df = pd.DataFrame(dict([(k, pd.Series(v)) for k, v in merged_filters.items()]))
+            param_df = param_df.fillna("")  
+
+            param_col_idx = last_col + 2
+            param_anchor = sheet.range((start_cell.row, param_col_idx))
+            param_anchor.options(index=False).value = param_df
+            
+            n_rows = param_df.shape[0] + 1  
+            n_cols = param_df.shape[1]
+            
+            param_tbl = sheet.range(
+                (param_anchor.row, param_anchor.column),
+                (param_anchor.row + n_rows - 1, param_anchor.column + n_cols - 1)
+            )
+                                
+            p_headers = sheet.range((param_anchor.row, param_anchor.column), (param_anchor.row, param_tbl.last_cell.column))
+            p_headers.api.Font.Bold = True
+            p_headers.color = (255, 235, 156) 
+            p_headers.api.Borders.LineStyle = 1 
+            
+            param_tbl.api.Borders.LineStyle = 1 
+            param_tbl.api.HorizontalAlignment = -4108 
+            
+        sheet.used_range.columns.autofit()
+        st.toast("✅ Excel Updated!")
+else:
+    st.caption("💡 Excel export available on Windows only (xlwings requires COM).")

@@ -559,6 +559,18 @@ def get_parameter_data(code, parameter_path):
         parameter = parameter[~((parameter['intra_sl'] != 0) & (parameter['intra_sl'] < parameter['sl']))]
 
         parameter['orderside'] = parameter['orderside'].str.upper()
+        
+    elif (code == 'STARGET_PSL'):
+        
+        parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
+        parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
+
+        parameter['intra_sl'] = parameter.apply(lambda row: row['sl'] + float(row['intra_sl'].split('+')[-1]) if '+' in str(row['intra_sl']) else float(row['intra_sl']), axis=1)
+        parameter = parameter[~((parameter['intra_sl'] != 0) & (parameter['intra_sl'] < parameter['sl']))]
+
+        parameter['trade_interval'] = parameter['trade_interval'].str.upper()
+        parameter['orderside'] = parameter['orderside'].str.upper()
+
             
     elif (code == 'SUT_TT'):
 

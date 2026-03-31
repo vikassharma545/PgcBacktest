@@ -222,15 +222,38 @@ if __name__ == "__main__":
         sys.exit(0)
     print("All Parquet files are valid.\n")
     
-    try:
-        NV = float(input("\nEnter NV (Normalisation Value e.g. 17): ").strip())
-        if NV <= 0:
-            raise ValueError
-    except (ValueError, EOFError):
-        print("Invalid NV value. Exiting...")
-        input("Press Enter to Exit !!!")
-        sys.exit(0)
-    print(f"NV = {NV}")
+    DEFAULT_NV_MAP = {
+        "NIFTY": 17.0,
+        "SENSEX": 17.0,
+        "CRUDEOIL": 75.0,
+        "CRUDEOILM": 75.0,
+        "NATURALGAS": 35.0,
+        "NATGASMINI": 35.0,
+        "GOLD": 22.0,
+        "GOLDM": 22.0,
+        "SILVER": 30.0,
+        "SILVERM": 30.0
+    }
+
+    nv_dict = {}
+    print("\n--- Assigning Normalisation Values (NV) per Index ---")
+    for idx in indices:
+        idx_upper = idx.upper()
+        if idx_upper in DEFAULT_NV_MAP:
+            nv_dict[idx] = DEFAULT_NV_MAP[idx_upper]
+            print(f"✔ Auto-assigned NV for {idx} = {nv_dict[idx]}")
+        else:
+            while True:
+                try:
+                    val = float(input(f"➤ Enter NV for new index '{idx}': ").strip())
+                    if val <= 0:
+                        print("  ❌ NV must be greater than 0.")
+                        continue
+                    nv_dict[idx] = val
+                    break
+                except ValueError:
+                    print("  ❌ Invalid input. Please enter a number.")
+    # ---------------------------------------------------------
 
     if input("\nProceed with execution? (y/n): ").strip().lower() != 'y':
         print('❌ Execution cancelled.')
@@ -238,7 +261,7 @@ if __name__ == "__main__":
         sys.exit(0)
 
     max_row = 500000
-    dashboard_folder_path = parquet_files_folder_path.parent / f"{code}_dashboard"
+    dashboard_folder_path = parquet_files_folder_path.parent / f"{code}_dashboard_Normalised"
     print(f"\nDashBoard Files Folder Path: {dashboard_folder_path}\n")
     
     shutil.rmtree(dashboard_folder_path, ignore_errors=True)
@@ -250,6 +273,9 @@ if __name__ == "__main__":
     meta_data = {'CodeType': code_type, 'Strategy': code, 'Dates': parquet_files}
     print('\nBuilding DashBoard Files... \n')
     for index in indices:
+
+        current_nv = nv_dict[index]
+
         try:
             os.makedirs(f"{dashboard_folder_path}/{index}", exist_ok=True)
 
@@ -271,7 +297,7 @@ if __name__ == "__main__":
                         df = pl.read_parquet(path, columns=(name_columns + pnl_columns + ["Future"]))
                         return df.with_columns([
                             pl.col(name_columns).cast(pl.Utf8).cast(pl.Categorical),
-                            *[(pl.col(col) * 10000 / (pl.col("Future") * NV)).alias(col) for col in pnl_columns]
+                            *[(pl.col(col) * 10000 / (pl.col("Future") * current_nv)).alias(col) for col in pnl_columns]
                         ]).select(name_columns + pnl_columns)
 
                     with concurrent.futures.ThreadPoolExecutor() as exe:

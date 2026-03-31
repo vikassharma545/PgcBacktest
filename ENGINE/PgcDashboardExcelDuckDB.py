@@ -1,6 +1,16 @@
 import os
 import re
 import sys
+import subprocess
+
+# ─── Self-Launcher: double-click to run ───
+# When you double-click this .py file, Python runs it directly.
+# We detect that and re-launch it via "streamlit run" automatically.
+if "streamlit" not in sys.modules:
+    script_path = os.path.abspath(__file__)
+    subprocess.Popen([sys.executable, "-m", "streamlit", "run", script_path, "--server.headless=false"], cwd=os.path.dirname(script_path))
+    sys.exit(0)
+
 import duckdb
 import pickle
 import tempfile

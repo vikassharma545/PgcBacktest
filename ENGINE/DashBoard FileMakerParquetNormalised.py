@@ -261,7 +261,7 @@ if __name__ == "__main__":
         sys.exit(0)
 
     max_row = 500000
-    dashboard_folder_path = parquet_files_folder_path.parent / f"{code}_dashboard_Normalised"
+    dashboard_folder_path = parquet_files_folder_path.parent / f"{code}_dashboard_normalised"
     print(f"\nDashBoard Files Folder Path: {dashboard_folder_path}\n")
     
     shutil.rmtree(dashboard_folder_path, ignore_errors=True)

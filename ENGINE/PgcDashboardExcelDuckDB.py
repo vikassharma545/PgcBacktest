@@ -107,7 +107,7 @@ def load_and_filter_data(filtered_parquet_files, filter_conditions_tuple, top_le
     conditions = []
     for col, vals in filter_conditions.items():
         if vals and col not in top_level_filter_col:
-            val_str = ", ".join([f"'{v}'" if isinstance(v, str) else str(v) for v in vals])
+            val_str = ", ".join([f"'{str(v).replace(chr(39), chr(39)+chr(39))}'" if isinstance(v, str) else str(v) for v in vals])
             conditions.append(f'"{col}" IN ({val_str})')
             
     where_sql = " AND ".join(conditions) if conditions else "1=1"
@@ -456,8 +456,16 @@ if sys.platform == 'win32':
                     wb.save(file_path)
             except Exception as e:
                 st.error(f"❌ Fatal Excel Error: Unable to start Excel. Please close all instances and try again. Error: {e}")
+                st.stop()
 
     if wb:
+        expected_sheets = {"HeatMapDashboard", "Drawdown", "Avg by Year", "Avg by Month", "Calmar Ratio"}
+        stale_sheets = [s for s in wb.sheets if s.name not in expected_sheets]
+        # Keep at least one sheet alive — Excel crashes if all are deleted
+        if len(stale_sheets) < len(wb.sheets):
+            for s in stale_sheets:
+                s.delete()
+        
         sheet_name = "HeatMapDashboard"
         try:
             sheet = wb.sheets[sheet_name]
@@ -579,7 +587,7 @@ if sys.platform == 'win32':
 
         dd_pivot = dd_results.pivot_table(
             index=pivot_index, columns=pivot_column, values='DD',
-            aggfunc='sum', fill_value=0
+            aggfunc='mean', fill_value=0
         ).round(0)
 
         dd_pivot = dd_pivot.reindex(index=sort_mixed_list(dd_pivot.index.tolist()),
@@ -753,8 +761,8 @@ if sys.platform == 'win32':
         # Calculate ratio and map zero drawdowns safely to 0.0
         calmar = (avg_inner / dd_abs).fillna(0.0).round(2)
 
-        calmar['Grand Total'] = calmar.mean(axis=1).round(2)
         calmar.loc['Grand Total'] = calmar.mean(axis=0).round(2)
+        calmar['Grand Total'] = calmar.mean(axis=1).round(2)
 
         write_heatmap_sheet(wb, "Calmar Ratio", pivot_column, calmar)
 

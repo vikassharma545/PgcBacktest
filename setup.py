@@ -1,10 +1,10 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="pgc_backtest",
+    name="pgcbacktest",
     version="0.1.0",
     description="A Python package for backtesting trading strategies",
-    long_description="pgc_backtest is a Python module designed for backtesting trading strategies using pandas, numpy, and other essential libraries.",
+    long_description="pgcbacktest is a Python module designed for backtesting trading strategies using pandas, numpy, and other essential libraries.",
     long_description_content_type="text/plain",
     author="Vikas Sharma",
     author_email="Jnv2252@Gmail.com",

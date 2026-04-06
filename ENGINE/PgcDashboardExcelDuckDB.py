@@ -413,7 +413,7 @@ if len(filtered_data) == 0:
 raw_filtered_data = filtered_data
 
 filtered_data = filtered_data.group_by([pivot_index, pivot_column]).agg(pl.col("Points").sum())
-pivot = filtered_data.to_pandas().set_index([pivot_index, pivot_column]).unstack(fill_value=0).round(0)
+pivot = filtered_data.to_pandas().set_index([pivot_index, pivot_column]).unstack(fill_value=0).round(2)
 
 if pivot.empty:
     st.warning("Pivot table is empty — no data for this Row × Column combination.")
@@ -576,9 +576,7 @@ if sys.platform == 'win32':
             arr = pnl_series.values.astype(float)
             if len(arr) == 0:
                 return 0.0
-            if len(arr) == 1:
-                return float(min(0.0, arr[0]))
-            cum = np.cumsum(arr)
+            cum = np.concatenate(([0.0], np.cumsum(arr)))
             peak = np.maximum.accumulate(cum)
             return float(np.min(cum - peak))
 
@@ -588,7 +586,7 @@ if sys.platform == 'win32':
         dd_pivot = dd_results.pivot_table(
             index=pivot_index, columns=pivot_column, values='DD',
             aggfunc='mean', fill_value=0
-        ).round(0)
+        ).round(2)
 
         dd_pivot = dd_pivot.reindex(index=sort_mixed_list(dd_pivot.index.tolist()),
                                     columns=sort_mixed_list(dd_pivot.columns.tolist()),
@@ -708,12 +706,12 @@ if sys.platform == 'win32':
         ).to_pandas()
 
         avg_year = pd.merge(total_pnl, months_active, on=[pivot_index, pivot_column])
-        avg_year['Points'] = (avg_year['Points'] / avg_year['Total_Months'] * 12).round(0)
+        avg_year['Points'] = (avg_year['Points'] / avg_year['Total_Months'] * 12).round(2)
 
         avg_year_pivot = avg_year.pivot_table(
             index=pivot_index, columns=pivot_column, values='Points',
             aggfunc='sum', fill_value=0
-        ).round(0)
+        ).round(2)
 
         avg_year_pivot = avg_year_pivot.reindex(
             index=sort_mixed_list(avg_year_pivot.index.tolist()),
@@ -731,12 +729,12 @@ if sys.platform == 'win32':
         n_months_total = monthly_pnl.groupby(['Year', 'Month']).ngroups
 
         avg_month = monthly_pnl.groupby([pivot_index, pivot_column])['Points'].sum().reset_index()
-        avg_month['Points'] = (avg_month['Points'] / n_months_total).round(0)
+        avg_month['Points'] = (avg_month['Points'] / n_months_total).round(2)
 
         avg_month_pivot = avg_month.pivot_table(
             index=pivot_index, columns=pivot_column, values='Points',
             aggfunc='sum', fill_value=0
-        ).round(0)
+        ).round(2)
 
         avg_month_pivot = avg_month_pivot.reindex(
             index=sort_mixed_list(avg_month_pivot.index.tolist()),

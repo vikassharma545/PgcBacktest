@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import time
 import subprocess
 
 # ─── Self-Launcher: double-click to run ───
@@ -340,11 +341,28 @@ with ax2:
     pivot_column = st.selectbox("Col", options=name_columns, index=name_columns.index('EndTime') if 'EndTime' in name_columns else min(1, len(name_columns) - 1), label_visibility="collapsed")
     st.markdown('</div></div>', unsafe_allow_html=True)
 
+# Row & Column value selectors
+rv1, rv2 = st.columns(2)
+pivot_index_values = sort_mixed_list(dashboard_metadata[pivot_index])
+pivot_column_values = sort_mixed_list(dashboard_metadata[pivot_column])
+with rv1:
+    st.markdown(f'<div class="slicer-box"><div class="slicer-header">{pivot_index} (Row Values)</div><div class="slicer-body">', unsafe_allow_html=True)
+    selected_row_values = st.segmented_control(f"{pivot_index} values", options=pivot_index_values, selection_mode="multi", default=pivot_index_values, key=f"seg_pivot_index_{pivot_index}", label_visibility="collapsed")
+    st.markdown('</div></div>', unsafe_allow_html=True)
+with rv2:
+    st.markdown(f'<div class="slicer-box"><div class="slicer-header">{pivot_column} (Column Values)</div><div class="slicer-body">', unsafe_allow_html=True)
+    selected_col_values = st.segmented_control(f"{pivot_column} values", options=pivot_column_values, selection_mode="multi", default=pivot_column_values, key=f"seg_pivot_column_{pivot_column}", label_visibility="collapsed")
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
 # ─────────────────────────────────────────────
 #  Filters (Excel slicer boxes)
 # ─────────────────────────────────────────────
 
 filtered_dict = {}
+if selected_row_values:
+    filtered_dict[pivot_index] = selected_row_values
+if selected_col_values:
+    filtered_dict[pivot_column] = selected_col_values
 filter_columns = [c for c in name_columns if c not in [pivot_index, pivot_column]]
 filter_data = {}
 for column in filter_columns:
@@ -377,6 +395,10 @@ if pivot_index == pivot_column:
     st.warning("⚠️ Row and Column cannot be the same. Please select different axes.")
     st.stop()
 
+if not selected_row_values or not selected_col_values:
+    st.warning("⚠️ Please select at least one value for both Row and Column.")
+    st.stop()
+
 if code_type == 'Intraday':
     top_level_filter_col = ['Index', 'Year', 'Month', 'DTE', 'PL Basis']
 elif code_type == 'Weekly':
@@ -399,6 +421,13 @@ if not filtered_parquet_files:
 
 filter_tuple = tuple((k, tuple(v) if v else ()) for k, v in filtered_dict.items())
 files_tuple = tuple(filtered_parquet_files)
+
+# Debounce: wait 2s after last slicer change before running heavy computation
+_debounce_key = (filter_tuple, files_tuple, pivot_index, pivot_column)
+if _debounce_key != st.session_state.get('_debounce_key'):
+    st.session_state._debounce_key = _debounce_key
+    time.sleep(2)
+    st.rerun()
 
 with st.spinner("Calculating..."):
     filtered_data, load_time = load_and_filter_data(files_tuple, filter_tuple, tuple(top_level_filter_col))

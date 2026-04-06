@@ -594,11 +594,17 @@ if sys.platform == 'win32':
         raw_df = raw_filtered_data.to_pandas()
         raw_df['_month_ord'] = raw_df['Month'].map(MONTH_ORDER).fillna(0)
 
+        def _unique_cols(*cols):
+            seen = set()
+            return [c for c in cols if not (c in seen or seen.add(c))]
+
         if market_type == 'MCX':
-            period_pnl = raw_df.groupby([pivot_index, pivot_column, 'Year', '_month_ord', 'DTE'])['Points'].sum().reset_index()
+            gb_cols = _unique_cols(pivot_index, pivot_column, 'Year', '_month_ord', 'DTE')
+            period_pnl = raw_df.groupby(gb_cols)['Points'].sum().reset_index()
             period_pnl = period_pnl.sort_values(['Year', '_month_ord', 'DTE'], ascending=[True, True, False])
         else:
-            period_pnl = raw_df.groupby([pivot_index, pivot_column, 'Year', '_month_ord'])['Points'].sum().reset_index()
+            gb_cols = _unique_cols(pivot_index, pivot_column, 'Year', '_month_ord')
+            period_pnl = raw_df.groupby(gb_cols)['Points'].sum().reset_index()
             period_pnl = period_pnl.sort_values(['Year', '_month_ord'])
 
         def max_drawdown(pnl_series):
@@ -724,7 +730,8 @@ if sys.platform == 'win32':
         # ─────────────────────────────────────────
         #  Avg by Year Tab
         # ─────────────────────────────────────────
-        monthly_pnl = raw_filtered_data.group_by([pivot_index, pivot_column, 'Year', 'Month']).agg(
+        monthly_gb = _unique_cols(pivot_index, pivot_column, 'Year', 'Month')
+        monthly_pnl = raw_filtered_data.group_by(monthly_gb).agg(
             pl.col("Points").sum()
         ).to_pandas()
         

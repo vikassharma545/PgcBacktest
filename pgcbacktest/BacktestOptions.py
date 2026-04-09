@@ -465,7 +465,7 @@ class IntradayBacktest:
                                 
         return None, None, None, None, None, None
     
-    def get_ut_strike(self, start_dt, end_dt, om=None, target=None):
+    def get_ut_strike(self, start_dt, end_dt, om=None, target=None, above_target_only=True):
 
         valid_times = self.future_data.loc[start_dt:end_dt].index
         for current_dt in valid_times:
@@ -475,8 +475,12 @@ class IntradayBacktest:
                 target = one_om * om if target is None else target
                 dt_options = self._options_by_dt.get(current_dt)
                 if dt_options is None: continue
-                target_od = dt_options[dt_options['close'] >= target].sort_values(by=['close'])
-                
+
+                if above_target_only:
+                    target_od = dt_options[dt_options['close'] >= target].sort_values(by=['close'])
+                else:
+                    target_od = dt_options[dt_options['close'] <= target].sort_values(by=['close'], ascending=False)
+
                 ce_scrip = target_od.loc[target_od['scrip'].str.endswith('CE'), 'scrip'].iloc[0]
                 pe_scrip = target_od.loc[target_od['scrip'].str.endswith('PE'), 'scrip'].iloc[0]
                 
@@ -492,23 +496,26 @@ class IntradayBacktest:
             
         return None, None, None, None, None, None
 
-    def _get_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1, only=None, obove_target_only=False, SDroundoff=False):
+    def _get_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1, only=None, obove_target_only=None, SDroundoff=False):
         
-        if ('%' in str(om) and "ATM" not in str(om).upper()) or obove_target_only:
+        if (obove_target_only is not None) or ("P<" in str(om).upper().replace(' ', '')) or ("P>" in str(om).upper().replace(' ', '')):
             
-            if '%' in str(om) and 'ATM' not in str(om).upper():
-                om_precent = float(om.replace(' ', '').replace('%', ''))
-                future_price = self.future_data['close'].iloc[0]
-                one_om = self.get_one_om(future_price)
-                target = one_om*om_precent/100
+            if ("P<" in str(om).upper().replace(' ', '')):
+                target = float(str(om).upper().replace(' ', '').replace("P<", ""))
+                om = None
+                obove_target_only = False
+            elif ("P>" in str(om).upper().replace(' ', '')):
+                target = float(str(om).upper().replace(' ', '').replace("P>", ""))
+                om = None
+                obove_target_only = True
 
-            ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_ut_strike(start_dt, end_dt, om=om, target=target)  
+            ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_ut_strike(start_dt, end_dt, om=om, target=target, above_target_only=obove_target_only)  
         else:
-            if 'SD' in str(om).upper():
+            if 'SD' in str(om).upper().replace(' ', ''):
                 sd = float(om.upper().replace(' ', '').replace('SD', ''))
                 om = None
                 atm = None
-            elif "ATM" in str(om).upper():
+            elif "ATM" in str(om).upper().replace(' ', ''):
                 sd = 0
                 atm = str(om).upper().replace(' ', '')
                 om = None
@@ -1642,7 +1649,7 @@ class WeeklyBacktest(IntradayBacktest):
                 
         return None, None, None, None, None, None
     
-    def get_ut_strike(self, start_dt, end_dt, om=None, target=None):
+    def get_ut_strike(self, start_dt, end_dt, om=None, target=None, above_target_only=True):
         
         current_date = start_dt.date()
         valid_times = self.future_data.loc[start_dt:end_dt].index
@@ -1653,11 +1660,15 @@ class WeeklyBacktest(IntradayBacktest):
                 target = one_om * om if target is None else target
                 dt_options = self._options_by_dt.get(current_dt)
                 if dt_options is None: continue
-                target_od = dt_options[dt_options['close'] >= target].sort_values(by=['close'])
-                
+
+                if above_target_only:
+                    target_od = dt_options[dt_options['close'] >= target].sort_values(by=['close'])
+                else:
+                    target_od = dt_options[dt_options['close'] <= target].sort_values(by=['close'], ascending=False)
+
                 ce_scrip = target_od.loc[target_od['scrip'].str.endswith('CE'), 'scrip'].iloc[0]
                 pe_scrip = target_od.loc[target_od['scrip'].str.endswith('PE'), 'scrip'].iloc[0]
-                
+
                 ce_price, pe_price = self._price_lookup[(current_dt, ce_scrip)], self._price_lookup[(current_dt, pe_scrip)]
 
                 return ce_scrip, pe_scrip, ce_price, pe_price, future_price, current_dt
@@ -1670,23 +1681,26 @@ class WeeklyBacktest(IntradayBacktest):
 
         return None, None, None, None, None, None
 
-    def _get_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1, only=None, obove_target_only=False, SDroundoff=False):
-        
-        if ('%' in str(om) and "ATM" not in str(om).upper()) or obove_target_only:
-            
-            if '%' in str(om) and 'ATM' not in str(om).upper():
-                om_precent = float(om.replace(' ', '').replace('%', ''))
-                future_price = self.future_data['close'].iloc[0]
-                one_om = self.get_one_om(future_price)
-                target = one_om*om_precent/100
+    def _get_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1, only=None, obove_target_only=None, SDroundoff=False):
 
-            ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_ut_strike(start_dt, end_dt, om=om, target=target)  
+        if (obove_target_only is not None) or ("P<" in str(om).upper().replace(' ', '')) or ("P>" in str(om).upper().replace(' ', '')):
+            
+            if ("P<" in str(om).upper().replace(' ', '')):
+                target = float(str(om).upper().replace(' ', '').replace("P<", ""))
+                om = None
+                obove_target_only = False
+            elif ("P>" in str(om).upper().replace(' ', '')):
+                target = float(str(om).upper().replace(' ', '').replace("P>", ""))
+                om = None
+                obove_target_only = True
+
+            ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_ut_strike(start_dt, end_dt, om=om, target=target, above_target_only=obove_target_only)
         else:
-            if 'SD' in str(om).upper():
+            if 'SD' in str(om).upper().replace(' ', ''):
                 sd = float(om.upper().replace(' ', '').replace('SD', ''))
                 om = None
                 atm = None
-            elif "ATM" in str(om).upper():
+            elif "ATM" in str(om).upper().replace(' ', ''):
                 sd = 0
                 atm = str(om).upper().replace(' ', '')
                 om = None

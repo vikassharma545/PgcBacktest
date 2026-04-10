@@ -225,6 +225,8 @@ class IntradayBacktest:
         self._options_by_dt = {}
         for dt, group in self.options.groupby('date_time', sort=False, observed=True):
             self._options_by_dt[dt] = group
+            
+        self.spot_data = self.get_spot_data(index, date=self.current_date)
 
         if self.index in NSE_INDICES:
             self.market = 'NSE'
@@ -252,6 +254,21 @@ class IntradayBacktest:
         future_pickle_path = f'{self.pickle_path}{self.PREFIX.get(index_lower, index)} Future/{{date}}_{index_lower}_future.{{extn}}'
         option_pickle_path = f'{self.pickle_path}{self.PREFIX.get(index_lower, index)} Options/{{date}}_{index_lower}.{{extn}}'
         return future_pickle_path, option_pickle_path
+    
+    def get_spot_data(self, index, date=None):
+        try:
+            spot_pickle_path = f'{self.pickle_path}/_indices/{index}.parquet'
+            spot_data = pd.read_parquet(spot_pickle_path).set_index('date_time')
+            spot_data = spot_data[["open", "high", "low", "close"]]
+            
+            if date:
+                date = pd.to_datetime(date)
+                spot_data = spot_data[spot_data.index.date == date.date()]
+            
+        except:
+            spot_data = pd.DataFrame(columns=['scrip', 'date_time', 'open', 'high', 'low', 'close', 'volume', 'openinterest']).set_index('date_time')
+            
+        return spot_data
 
     def Cal_slipage(self, price):
         return price * self._slipage_rate
@@ -329,35 +346,42 @@ class IntradayBacktest:
         for current_dt in valid_times:
             try:
                 # find strike nearest to future price
-                future_price = self.future_data.loc[current_dt,'close']
-                round_future_price = round(future_price/self.gap)*self.gap
-
-                ce_scrip, pe_scrip = f"{round_future_price}CE", f"{round_future_price}PE"
-                ce_price, pe_price = self._price_lookup[(current_dt, ce_scrip)], self._price_lookup[(current_dt, pe_scrip)]
+                if atm and ("ATMS" in str(atm).upper()):
+                    future_price = self.spot_data.loc[current_dt,'close']
+                    round_future_price = round(future_price/self.gap)*self.gap
+                    ce_scrip, pe_scrip = f"{round_future_price}CE", f"{round_future_price}PE"
+                    ce_price, pe_price = self._price_lookup[(current_dt, ce_scrip)], self._price_lookup[(current_dt, pe_scrip)]
                 
-                # Synthetic future
-                syn_future = ce_price - pe_price + round_future_price
-                round_syn_future = round(syn_future/self.gap)*self.gap
+                else:
+                    future_price = self.future_data.loc[current_dt,'close']
+                    round_future_price = round(future_price/self.gap)*self.gap
 
-                # Scrip lists
-                ce_scrip_list = [f"{round_syn_future}CE", f"{round_syn_future+self.gap}CE", f"{round_syn_future-self.gap}CE"]
-                pe_scrip_list = [f"{round_syn_future}PE", f"{round_syn_future+self.gap}PE", f"{round_syn_future-self.gap}PE"]
-                
-                scrip_index, min_value = None, float("inf")
-                for i in range(3):
-                    try:
-                        ce_price = self._price_lookup[(current_dt, ce_scrip_list[i])]
-                        pe_price = self._price_lookup[(current_dt, pe_scrip_list[i])]
-                        diff = abs(ce_price-pe_price)
-                        if min_value > diff:
-                            min_value = diff
-                            scrip_index = i
-                    except:
-                        pass
-                        
-                # Required scrip and their price
-                ce_scrip, pe_scrip = ce_scrip_list[scrip_index], pe_scrip_list[scrip_index]
-                ce_price, pe_price = self._price_lookup[(current_dt, ce_scrip)], self._price_lookup[(current_dt, pe_scrip)]
+                    ce_scrip, pe_scrip = f"{round_future_price}CE", f"{round_future_price}PE"
+                    ce_price, pe_price = self._price_lookup[(current_dt, ce_scrip)], self._price_lookup[(current_dt, pe_scrip)]
+                    
+                    # Synthetic future
+                    syn_future = ce_price - pe_price + round_future_price
+                    round_syn_future = round(syn_future/self.gap)*self.gap
+
+                    # Scrip lists
+                    ce_scrip_list = [f"{round_syn_future}CE", f"{round_syn_future+self.gap}CE", f"{round_syn_future-self.gap}CE"]
+                    pe_scrip_list = [f"{round_syn_future}PE", f"{round_syn_future+self.gap}PE", f"{round_syn_future-self.gap}PE"]
+                    
+                    scrip_index, min_value = None, float("inf")
+                    for i in range(3):
+                        try:
+                            ce_price = self._price_lookup[(current_dt, ce_scrip_list[i])]
+                            pe_price = self._price_lookup[(current_dt, pe_scrip_list[i])]
+                            diff = abs(ce_price-pe_price)
+                            if min_value > diff:
+                                min_value = diff
+                                scrip_index = i
+                        except:
+                            pass
+                            
+                    # Required scrip and their price
+                    ce_scrip, pe_scrip = ce_scrip_list[scrip_index], pe_scrip_list[scrip_index]
+                    ce_price, pe_price = self._price_lookup[(current_dt, ce_scrip)], self._price_lookup[(current_dt, pe_scrip)]
         
                 if sd:
                     sd_range = abs((ce_price+pe_price)*sd)
@@ -375,17 +399,17 @@ class IntradayBacktest:
                 elif atm is not None and "ATM" in str(atm).upper():
                     
                     atm = str(atm).upper().replace(' ', '')
-                    if atm == "ATM":
+                    if (atm == "ATM") or (atm == "ATMS"):
                         pass
                     elif "%" in str(atm):
-                        pct_val = float(atm.replace("ATM", "").replace("%", ""))
+                        pct_val = float(atm.replace("ATM", "").replace("ATMS", "").replace("%", ""))
                         target_value = future_price * (pct_val/100.0)
                         target_value = round(target_value/self.gap) * self.gap
                         
                         ce_scrip = f"{get_strike(ce_scrip) + target_value}CE"
                         pe_scrip = f"{get_strike(pe_scrip) - target_value}PE"
                     else:
-                        steps = int(atm.replace("ATM", ""))
+                        steps = int(atm.replace("ATM", "").replace("ATMS", ""))
                         target_value = steps*self.gap
                         
                         ce_scrip = f"{get_strike(ce_scrip) + target_value}CE"
@@ -1470,32 +1494,39 @@ class WeeklyBacktest(IntradayBacktest):
         valid_times = self.future_data.loc[start_dt:end_dt].index
         for current_dt in valid_times:
             try:
-                future_price = self.future_data.loc[current_dt,'close']
-                round_future_price = round(future_price/self.gap)*self.gap
+                if atm and ("ATMS" in str(atm).upper()):
+                    future_price = self.spot_data.loc[current_dt,'close']
+                    round_future_price = round(future_price/self.gap)*self.gap
+                    ce_scrip, pe_scrip = f"{round_future_price}CE", f"{round_future_price}PE"
+                    ce_price, pe_price = self._price_lookup[(current_dt, ce_scrip)], self._price_lookup[(current_dt, pe_scrip)]
+                    
+                else:
+                    future_price = self.future_data.loc[current_dt,'close']
+                    round_future_price = round(future_price/self.gap)*self.gap
 
-                ce_scrip, pe_scrip = f"{round_future_price}CE", f"{round_future_price}PE"
-                ce_price, pe_price = self._price_lookup[(current_dt, ce_scrip)], self._price_lookup[(current_dt, pe_scrip)]
-                
-                syn_future = ce_price - pe_price + round_future_price
-                round_syn_future = round(syn_future/self.gap)*self.gap
+                    ce_scrip, pe_scrip = f"{round_future_price}CE", f"{round_future_price}PE"
+                    ce_price, pe_price = self._price_lookup[(current_dt, ce_scrip)], self._price_lookup[(current_dt, pe_scrip)]
+                    
+                    syn_future = ce_price - pe_price + round_future_price
+                    round_syn_future = round(syn_future/self.gap)*self.gap
 
-                ce_scrip_list = [f"{round_syn_future}CE", f"{round_syn_future+self.gap}CE", f"{round_syn_future-self.gap}CE"]
-                pe_scrip_list = [f"{round_syn_future}PE", f"{round_syn_future+self.gap}PE", f"{round_syn_future-self.gap}PE"]
-                
-                scrip_index, min_value = None, float("inf")
-                for i in range(3):
-                    try:
-                        ce_price = self._price_lookup[(current_dt, ce_scrip_list[i])]
-                        pe_price = self._price_lookup[(current_dt, pe_scrip_list[i])]
-                        diff = abs(ce_price-pe_price)
-                        if min_value > diff:
-                            min_value = diff
-                            scrip_index = i
-                    except:
-                        pass
-                        
-                ce_scrip, pe_scrip = ce_scrip_list[scrip_index], pe_scrip_list[scrip_index]
-                ce_price, pe_price = self._price_lookup[(current_dt, ce_scrip)], self._price_lookup[(current_dt, pe_scrip)]
+                    ce_scrip_list = [f"{round_syn_future}CE", f"{round_syn_future+self.gap}CE", f"{round_syn_future-self.gap}CE"]
+                    pe_scrip_list = [f"{round_syn_future}PE", f"{round_syn_future+self.gap}PE", f"{round_syn_future-self.gap}PE"]
+                    
+                    scrip_index, min_value = None, float("inf")
+                    for i in range(3):
+                        try:
+                            ce_price = self._price_lookup[(current_dt, ce_scrip_list[i])]
+                            pe_price = self._price_lookup[(current_dt, pe_scrip_list[i])]
+                            diff = abs(ce_price-pe_price)
+                            if min_value > diff:
+                                min_value = diff
+                                scrip_index = i
+                        except:
+                            pass
+                            
+                    ce_scrip, pe_scrip = ce_scrip_list[scrip_index], pe_scrip_list[scrip_index]
+                    ce_price, pe_price = self._price_lookup[(current_dt, ce_scrip)], self._price_lookup[(current_dt, pe_scrip)]
         
                 if sd:
                     sd_range = abs((ce_price+pe_price)*sd)
@@ -1513,17 +1544,17 @@ class WeeklyBacktest(IntradayBacktest):
                 elif atm is not None and "ATM" in str(atm).upper():
                     
                     atm = str(atm).upper().replace(' ', '')
-                    if atm == "ATM":
+                    if (atm == "ATM") or (atm == "ATMS"):
                         pass
                     elif "%" in str(atm):
-                        pct_val = float(atm.replace("ATM", "").replace("%", ""))
+                        pct_val = float(atm.replace("ATM", "").replace("ATMS", "").replace("%", ""))
                         target_value = future_price * (pct_val/100.0)
                         target_value = round(target_value/self.gap) * self.gap
                         
                         ce_scrip = f"{get_strike(ce_scrip) + target_value}CE"
                         pe_scrip = f"{get_strike(pe_scrip) - target_value}PE"
                     else:
-                        steps = int(atm.replace("ATM", ""))
+                        steps = int(atm.replace("ATM", "").replace("ATMS", ""))
                         target_value = steps*self.gap
                         
                         ce_scrip = f"{get_strike(ce_scrip) + target_value}CE"

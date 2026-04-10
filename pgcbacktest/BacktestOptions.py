@@ -402,14 +402,14 @@ class IntradayBacktest:
                     if (atm == "ATM") or (atm == "ATMS"):
                         pass
                     elif "%" in str(atm):
-                        pct_val = float(atm.replace("ATM", "").replace("ATMS", "").replace("%", ""))
+                        pct_val = float(atm.replace("ATMS", "").replace("ATM", "").replace("%", ""))
                         target_value = future_price * (pct_val/100.0)
                         target_value = round(target_value/self.gap) * self.gap
                         
                         ce_scrip = f"{get_strike(ce_scrip) + target_value}CE"
                         pe_scrip = f"{get_strike(pe_scrip) - target_value}PE"
                     else:
-                        steps = int(atm.replace("ATM", "").replace("ATMS", ""))
+                        steps = int(atm.replace("ATMS", "").replace("ATM", ""))
                         target_value = steps*self.gap
                         
                         ce_scrip = f"{get_strike(ce_scrip) + target_value}CE"
@@ -1547,14 +1547,14 @@ class WeeklyBacktest(IntradayBacktest):
                     if (atm == "ATM") or (atm == "ATMS"):
                         pass
                     elif "%" in str(atm):
-                        pct_val = float(atm.replace("ATM", "").replace("ATMS", "").replace("%", ""))
+                        pct_val = float(atm.replace("ATMS", "").replace("ATM", "").replace("%", ""))
                         target_value = future_price * (pct_val/100.0)
                         target_value = round(target_value/self.gap) * self.gap
                         
                         ce_scrip = f"{get_strike(ce_scrip) + target_value}CE"
                         pe_scrip = f"{get_strike(pe_scrip) - target_value}PE"
                     else:
-                        steps = int(atm.replace("ATM", "").replace("ATMS", ""))
+                        steps = int(atm.replace("ATMS", "").replace("ATM", ""))
                         target_value = steps*self.gap
                         
                         ce_scrip = f"{get_strike(ce_scrip) + target_value}CE"

@@ -45,9 +45,15 @@ def get_pm_time_index(dates, meta_start_time, meta_end_time):
     return time_index
 
 def set_pm_time_index(data, time_index):
-    if data.empty:
-        return pd.Series(0, index=time_index)
-    return data.reindex(index=time_index, method='ffill', fill_value=0, copy=True)
+    n = len(data)
+    if n == 0:
+        return np.zeros(len(time_index), dtype=np.float64)
+    padded = np.empty(n + 1, dtype=np.float64)
+    padded[0] = 0.0
+    padded[1:] = data.values
+    idx = np.searchsorted(data.index.values, time_index.values, side='right')
+    return padded[idx]
+
 
 cv = lambda x: str(float(x)) if isinstance(x, (int, float)) or (isinstance(x, str) and x.replace('.', '', 1).isdigit()) else x
 
@@ -239,15 +245,15 @@ class IntradayBacktest:
         else:
             self.market = 'OTHER'
 
-        self.get_single_leg_data = lru_cache(maxsize=4096)(self._get_single_leg_data)
-        self.get_straddle_data = lru_cache(maxsize=4096)(self._get_straddle_data)
-        self.get_strike = lru_cache(maxsize=4096)(self._get_strike)
-        self.sl_check_single_leg = lru_cache(maxsize=4096)(self._sl_check_single_leg)
-        self.sl_check_combine_leg = lru_cache(maxsize=4096)(self._sl_check_combine_leg)
-        self.decay_check_single_leg = lru_cache(maxsize=4096)(self._decay_check_single_leg)
-        self.sl_check_single_leg_with_sl_trail = lru_cache(maxsize=4096)(self._sl_check_single_leg_with_sl_trail)
-        self.sl_check_combine_leg_with_sl_trail = lru_cache(maxsize=4096)(self._sl_check_combine_leg_with_sl_trail)
-        self.straddle_indicator = lru_cache(maxsize=4096)(self._straddle_indicator)
+        self.get_single_leg_data = lru_cache(maxsize=16384)(self._get_single_leg_data)
+        self.get_straddle_data = lru_cache(maxsize=16384)(self._get_straddle_data)
+        self.get_strike = lru_cache(maxsize=16384)(self._get_strike)
+        self.sl_check_single_leg = lru_cache(maxsize=16384)(self._sl_check_single_leg)
+        self.sl_check_combine_leg = lru_cache(maxsize=16384)(self._sl_check_combine_leg)
+        self.decay_check_single_leg = lru_cache(maxsize=16384)(self._decay_check_single_leg)
+        self.sl_check_single_leg_with_sl_trail = lru_cache(maxsize=16384)(self._sl_check_single_leg_with_sl_trail)
+        self.sl_check_combine_leg_with_sl_trail = lru_cache(maxsize=16384)(self._sl_check_combine_leg_with_sl_trail)
+        self.straddle_indicator = lru_cache(maxsize=16384)(self._straddle_indicator)
 
     def get_future_option_path(self, index):
         index_lower = index.lower()
@@ -1457,19 +1463,19 @@ class WeeklyBacktest(IntradayBacktest):
         else:
             self.market = 'OTHER'
 
-        self.get_single_leg_data = lru_cache(maxsize=4096)(self._get_single_leg_data)
-        self.get_straddle_data = lru_cache(maxsize=4096)(self._get_straddle_data)
-        self.get_strike = lru_cache(maxsize=4096)(self._get_strike)
-        self.sl_check_single_leg = lru_cache(maxsize=4096)(self._sl_check_single_leg)
-        self.sl_check_combine_leg = lru_cache(maxsize=4096)(self._sl_check_combine_leg)
-        self.decay_check_single_leg = lru_cache(maxsize=4096)(self._decay_check_single_leg)
-        self.sl_check_single_leg_with_sl_trail = lru_cache(maxsize=4096)(self._sl_check_single_leg_with_sl_trail)
-        self.sl_check_combine_leg_with_sl_trail = lru_cache(maxsize=4096)(self._sl_check_combine_leg_with_sl_trail)
-        self.straddle_indicator = lru_cache(maxsize=4096)(self._straddle_indicator)
+        self.get_single_leg_data = lru_cache(maxsize=16384)(self._get_single_leg_data)
+        self.get_straddle_data = lru_cache(maxsize=16384)(self._get_straddle_data)
+        self.get_strike = lru_cache(maxsize=16384)(self._get_strike)
+        self.sl_check_single_leg = lru_cache(maxsize=16384)(self._sl_check_single_leg)
+        self.sl_check_combine_leg = lru_cache(maxsize=16384)(self._sl_check_combine_leg)
+        self.decay_check_single_leg = lru_cache(maxsize=16384)(self._decay_check_single_leg)
+        self.sl_check_single_leg_with_sl_trail = lru_cache(maxsize=16384)(self._sl_check_single_leg_with_sl_trail)
+        self.sl_check_combine_leg_with_sl_trail = lru_cache(maxsize=16384)(self._sl_check_combine_leg_with_sl_trail)
+        self.straddle_indicator = lru_cache(maxsize=16384)(self._straddle_indicator)
 
-        self.get_EOD_straddle_strike = lru_cache(maxsize=4096)(self._get_EOD_straddle_strike)
-        self.sl_range_check_combine_leg = lru_cache(maxsize=4096)(self._sl_range_check_combine_leg)
-        self.sl_range_trail_check_combine_leg = lru_cache(maxsize=4096)(self._sl_range_trail_check_combine_leg)
+        self.get_EOD_straddle_strike = lru_cache(maxsize=16384)(self._get_EOD_straddle_strike)
+        self.sl_range_check_combine_leg = lru_cache(maxsize=16384)(self._sl_range_check_combine_leg)
+        self.sl_range_trail_check_combine_leg = lru_cache(maxsize=16384)(self._sl_range_trail_check_combine_leg)
 
     def get_synthetic_future(self, straddle_strike, ce_price, pe_price):
         synthetic_future = straddle_strike + ce_price - pe_price

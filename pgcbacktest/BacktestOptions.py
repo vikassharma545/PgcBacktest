@@ -506,7 +506,11 @@ class IntradayBacktest:
                 dt_options = self._options_by_dt.get(current_dt)
                 if dt_options is None: continue
 
-                if above_target_only:
+                if above_target_only == "closest":
+                    dt_options = dt_options.copy()
+                    dt_options['_abs_diff'] = (dt_options['close'] - target).abs()
+                    target_od = dt_options.sort_values(by=['_abs_diff'])
+                elif above_target_only:
                     target_od = dt_options[dt_options['close'] >= target].sort_values(by=['close'])
                 else:
                     target_od = dt_options[dt_options['close'] <= target].sort_values(by=['close'], ascending=False)
@@ -528,7 +532,7 @@ class IntradayBacktest:
 
     def _get_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1, only=None, obove_target_only=None, SDroundoff=False):
         
-        if (obove_target_only is not None) or ("P<" in str(om).upper().replace(' ', '')) or ("P>" in str(om).upper().replace(' ', '')):
+        if (obove_target_only is not None) or ("P<" in str(om).upper().replace(' ', '')) or ("P>" in str(om).upper().replace(' ', '')) or ("P=" in str(om).upper().replace(' ', '')):
             
             if ("P<" in str(om).upper().replace(' ', '')):
                 target = float(str(om).upper().replace(' ', '').replace("P<", ""))
@@ -538,6 +542,10 @@ class IntradayBacktest:
                 target = float(str(om).upper().replace(' ', '').replace("P>", ""))
                 om = None
                 obove_target_only = True
+            elif ("P=" in str(om).upper().replace(' ', '')):
+                target = float(str(om).upper().replace(' ', '').replace("P=", ""))
+                om = None
+                obove_target_only = "closest"
 
             ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_ut_strike(start_dt, end_dt, om=om, target=target, above_target_only=obove_target_only)  
         else:
@@ -1919,7 +1927,11 @@ class WeeklyBacktest(IntradayBacktest):
                 dt_options = self._options_by_dt.get(current_dt)
                 if dt_options is None: continue
 
-                if above_target_only:
+                if above_target_only == "closest":
+                    dt_options = dt_options.copy()
+                    dt_options['_abs_diff'] = (dt_options['close'] - target).abs()
+                    target_od = dt_options.sort_values(by=['_abs_diff'])
+                elif above_target_only:
                     target_od = dt_options[dt_options['close'] >= target].sort_values(by=['close'])
                 else:
                     target_od = dt_options[dt_options['close'] <= target].sort_values(by=['close'], ascending=False)
@@ -1941,7 +1953,7 @@ class WeeklyBacktest(IntradayBacktest):
 
     def _get_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1, only=None, obove_target_only=None, SDroundoff=False):
 
-        if (obove_target_only is not None) or ("P<" in str(om).upper().replace(' ', '')) or ("P>" in str(om).upper().replace(' ', '')):
+        if (obove_target_only is not None) or ("P<" in str(om).upper().replace(' ', '')) or ("P>" in str(om).upper().replace(' ', '')) or ("P=" in str(om).upper().replace(' ', '')):
             
             if ("P<" in str(om).upper().replace(' ', '')):
                 target = float(str(om).upper().replace(' ', '').replace("P<", ""))
@@ -1951,6 +1963,10 @@ class WeeklyBacktest(IntradayBacktest):
                 target = float(str(om).upper().replace(' ', '').replace("P>", ""))
                 om = None
                 obove_target_only = True
+            elif ("P=" in str(om).upper().replace(' ', '')):
+                target = float(str(om).upper().replace(' ', '').replace("P=", ""))
+                om = None
+                obove_target_only = "closest"
 
             ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_ut_strike(start_dt, end_dt, om=om, target=target, above_target_only=obove_target_only)
         else:

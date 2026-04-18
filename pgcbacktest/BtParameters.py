@@ -333,6 +333,13 @@ def get_parameter_data(code, parameter_path):
         if code == 'NRE_SI':
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
             
+    elif (code == 'NRE_DT'):
+        # filter - where sl = 0
+        parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
+        
+        parameter['orderside'] = parameter['orderside'].str.upper()
+        parameter['method'] = parameter['method'].str.upper()
+            
     elif (code == 'NREW_PSL'):
         
         # filter - entry < (exit_time - 5min)
@@ -348,7 +355,7 @@ def get_parameter_data(code, parameter_path):
         parameter['orderside'] = parameter['orderside'].str.upper()
         parameter['method'] = parameter['method'].str.upper()
 
-    elif (code == 'NRE_PSL') or (code == 'NRE_SI_PSL') or (code == 'NRE_CC_PSL'):
+    elif (code == 'NRE_PSL') or (code == 'NRE_SI_PSL') or (code == 'NRE_CC_PSL') or (code == 'NRE_DT_PSL'):
         
         # filter - entry < (exit_time - 5min)
         parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]

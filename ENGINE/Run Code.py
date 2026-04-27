@@ -42,8 +42,8 @@ def get_sleep_config(parameter_len):
 def get_cpu_config():
     """Auto-detect initial terminals and scaling limits based on CPU."""
     cpu_count = psutil.cpu_count(logical=True)
-    initial = max(2, cpu_count)
-    max_terminals = cpu_count * 2
+    initial = max(2, int(cpu_count * 2 // 3))  # Start with 2/3 of cores, min 2
+    max_terminals = cpu_count
     initial = min(initial, max_terminals)
     scale_up_threshold = 70
     scale_up_ceiling = 90

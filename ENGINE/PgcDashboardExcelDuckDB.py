@@ -627,8 +627,8 @@ if sys.platform == 'win32':
                                     columns=sort_mixed_list(dd_pivot.columns.tolist()),
                                     fill_value=0)
 
-        dd_pivot['Grand Total'] = dd_pivot.sum(axis=1)
-        dd_pivot.loc['Grand Total'] = dd_pivot.sum(axis=0)
+        dd_pivot.loc['Grand Total'] = dd_pivot.mean(axis=0).round(2)
+        dd_pivot['Grand Total'] = dd_pivot.mean(axis=1).round(2)
 
         b1 = dd_sheet.range("B1")
         b1.value = pivot_column
@@ -754,8 +754,8 @@ if sys.platform == 'win32':
             columns=sort_mixed_list(avg_year_pivot.columns.tolist()),
             fill_value=0)
 
-        avg_year_pivot['Grand Total'] = avg_year_pivot.sum(axis=1)
-        avg_year_pivot.loc['Grand Total'] = avg_year_pivot.sum(axis=0)
+        avg_year_pivot.loc['Grand Total'] = avg_year_pivot.mean(axis=0).round(2)
+        avg_year_pivot['Grand Total'] = avg_year_pivot.mean(axis=1).round(2)
 
         write_heatmap_sheet(wb, "Avg by Year", pivot_column, avg_year_pivot)
 
@@ -777,8 +777,8 @@ if sys.platform == 'win32':
             columns=sort_mixed_list(avg_month_pivot.columns.tolist()),
             fill_value=0)
 
-        avg_month_pivot['Grand Total'] = avg_month_pivot.sum(axis=1)
-        avg_month_pivot.loc['Grand Total'] = avg_month_pivot.sum(axis=0)
+        avg_month_pivot.loc['Grand Total'] = avg_month_pivot.mean(axis=0).round(2)
+        avg_month_pivot['Grand Total'] = avg_month_pivot.mean(axis=1).round(2)
 
         write_heatmap_sheet(wb, "Avg by Month", pivot_column, avg_month_pivot)
 

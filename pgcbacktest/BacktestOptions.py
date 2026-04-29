@@ -531,7 +531,11 @@ class IntradayBacktest:
         return None, None, None, None, None, None
 
     def _get_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1, only=None, obove_target_only=None, SDroundoff=False):
-        
+
+        if "-I" in str(om).upper().replace(' ', ''):
+            om = str(om).upper().replace(' ', '').replace("-I", "")
+            check_inverted = True
+
         if (obove_target_only is not None) or ("P<" in str(om).upper().replace(' ', '')) or ("P>" in str(om).upper().replace(' ', '')) or ("P=" in str(om).upper().replace(' ', '')):
             
             if ("P<" in str(om).upper().replace(' ', '')):
@@ -1952,6 +1956,10 @@ class WeeklyBacktest(IntradayBacktest):
         return None, None, None, None, None, None
 
     def _get_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1, only=None, obove_target_only=None, SDroundoff=False):
+
+        if "-I" in str(om).upper().replace(' ', ''):
+            om = str(om).upper().replace(' ', '').replace("-I", "")
+            check_inverted = True
 
         if (obove_target_only is not None) or ("P<" in str(om).upper().replace(' ', '')) or ("P>" in str(om).upper().replace(' ', '')) or ("P=" in str(om).upper().replace(' ', '')):
             

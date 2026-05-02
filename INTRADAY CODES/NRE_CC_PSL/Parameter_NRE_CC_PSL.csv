@@ -1,2 +1,2 @@
-entry_time,exit_time,last_trade_time,trade_interval,orderside,method,sl,om,re_entries
-09:20:00,15:25:00,11:00:00,10min,SELL,CC,10,0,3
+entry_time,exit_time,last_trade_time,trade_interval,orderside,method,sl,re_sl,om,re_entries
+09:20:00,15:25:00,11:00:00,10min,SELL,CC,10,sl+0,0,3

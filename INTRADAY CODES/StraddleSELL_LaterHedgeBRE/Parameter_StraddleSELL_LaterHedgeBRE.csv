@@ -1,4 +1,4 @@
-entry_time,exit_time,method,hedge_premium%,hedge_sl,hedge_decay
+entry_time,exit_time,method,hedge_premium_pct,hedge_sl,hedge_decay
 09:20,15:25,CC,10,25,50
 09:30,,,15,50,100
 09:40,,,20,75,150

@@ -268,17 +268,58 @@ def select_folder_callback():
     if folder:
         st.session_state["folder_path"] = str(folder)
 
+def pick_folder_callback(path: str):
+    st.session_state["folder_path"] = path
+
 if "folder_path" not in st.session_state:
+    script_dir = Path(__file__).resolve().parent
+    dashboard_folders = sorted(
+        [p for p in script_dir.iterdir() if p.is_dir() and "dashboard" in p.name.lower()]
+    )
+
     st.markdown("""
-<div style="text-align:center;padding:60px 0">
+<div style="text-align:center;padding:60px 0 20px 0">
 <img src="https://raw.githubusercontent.com/vikassharma545/PgcStreamlitDashboard/main/img/logo.png" width="120" style="margin-bottom: 20px;">
 <h2 style="color:var(--text-color); margin-bottom: 5px;">PGC Dashboard</h2>
 <p style="color:#6b7280; margin-bottom: 25px;">Select a dashboard folder to begin</p>
 </div>
 """, unsafe_allow_html=True)
-    c1, c2, c3 = st.columns([1, 1, 1])
-    with c2:
-        st.button("📂 Select DashBoard Folder", type="primary", on_click=select_folder_callback, use_container_width=True)
+
+    outer_l, outer_c, outer_r = st.columns([1, 2, 1])
+    with outer_c:
+        if dashboard_folders:
+            st.markdown(
+                f"""<div style="text-align:center;background:color-mix(in srgb, #4472c4 12%, var(--background-color));padding:10px 16px;border-radius:6px;margin-bottom:14px;font-size:0.9rem;color:var(--text-color);">
+📁 Found <b>{len(dashboard_folders)}</b> dashboard folder(s) in <code>{script_dir}</code>
+</div>""",
+                unsafe_allow_html=True,
+            )
+            n = len(dashboard_folders)
+            cols_per_row = 1 if n == 1 else (2 if n == 2 else 3)
+            for row_start in range(0, n, cols_per_row):
+                row_folders = dashboard_folders[row_start:row_start + cols_per_row]
+                k = len(row_folders)
+                if k < cols_per_row:
+                    pad = (cols_per_row - k) / 2
+                    cells = st.columns([pad] + [1.0] * k + [pad])
+                    target_cols = cells[1:1 + k]
+                else:
+                    target_cols = st.columns(cols_per_row)
+                for i, folder in enumerate(row_folders):
+                    with target_cols[i]:
+                        st.button(
+                            f"📂 {folder.name}",
+                            key=f"pick_{folder.name}",
+                            type="primary",
+                            on_click=pick_folder_callback,
+                            args=(str(folder),),
+                            use_container_width=True,
+                        )
+            st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
+
+        label = "📂 Browse for Other Folder" if dashboard_folders else "📂 Select DashBoard Folder"
+        btn_type = "secondary" if dashboard_folders else "primary"
+        st.button(label, type=btn_type, on_click=select_folder_callback, use_container_width=True)
     st.stop()
 
 folder_path = st.session_state["folder_path"]

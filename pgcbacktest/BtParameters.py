@@ -320,18 +320,22 @@ def get_parameter_data(code, parameter_path):
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
 
             
-    elif (code == 'NRE') or (code == 'NREW') or (code == 'NRE_SI') or (code == 'NRE_CC') or (code == 'NREW_CC'):
+    elif (code == 'NRE') or (code == 'NREW') or (code == 'NRE_SI') or (code == 'NRE_CC') or (code == 'NREW_CC') or (code == 'NRE_CC_RE_TillTime'):
         # filter - where sl = 0
         parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
         parameter.loc[parameter['sl'] == 0, 're_sl'] = 0
         
-        parameter['re_sl'] = parameter.apply(lambda row: row['sl'] + float(row['re_sl'].split('+')[-1]) if '+' in str(row['re_sl']) else float(row['re_sl']), axis=1)
+        if 're_sl' in parameter.columns:
+            parameter['re_sl'] = parameter.apply(lambda row: row['sl'] + float(row['re_sl'].split('+')[-1]) if '+' in str(row['re_sl']) else float(row['re_sl']), axis=1)
         
         parameter['orderside'] = parameter['orderside'].str.upper()
         parameter['method'] = parameter['method'].str.upper()
         
         if code == 'NRE_SI':
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
+            
+        if code == 'NRE_CC_RE_TillTime':
+            parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time <= pd.to_datetime(parameter['till_time'], format='%H:%M:%S').dt.time]
             
     elif (code == 'NRE_DT'):
         # filter - where sl = 0
@@ -355,7 +359,7 @@ def get_parameter_data(code, parameter_path):
         parameter['orderside'] = parameter['orderside'].str.upper()
         parameter['method'] = parameter['method'].str.upper()
 
-    elif (code == 'NRE_PSL') or (code == 'NRE_CC_PSL'):
+    elif (code == 'NRE_PSL') or (code == 'NRE_CC_PSL') or (code == 'NRE_SI_PSL') or (code == 'NRE_DT_PSL') or (code == 'NRE_CC_RE_TillTime_PSL'):
 
         # filter - entry < (exit_time - 5min)
         parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time <= pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time]
@@ -364,27 +368,17 @@ def get_parameter_data(code, parameter_path):
         # filter - where sl = 0
         parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
 
-        parameter['re_sl'] = parameter.apply(lambda row: row['sl'] + float(row['re_sl'].split('+')[-1]) if '+' in str(row['re_sl']) else float(row['re_sl']), axis=1)
+        if 're_sl' in parameter.columns:
+            parameter['re_sl'] = parameter.apply(lambda row: row['sl'] + float(row['re_sl'].split('+')[-1]) if '+' in str(row['re_sl']) else float(row['re_sl']), axis=1)
 
         parameter['trade_interval'] = parameter['trade_interval'].str.upper()
         parameter['orderside'] = parameter['orderside'].str.upper()
         parameter['method'] = parameter['method'].str.upper()
-
-    elif (code == 'NRE_SI_PSL') or (code == 'NRE_DT_PSL'):
-
-        # filter - entry < (exit_time - 5min)
-        parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time <= pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time]
-        parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
-        
-        # filter - where sl = 0
-        parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
-        
-        parameter['trade_interval'] = parameter['trade_interval'].str.upper()
-        parameter['orderside'] = parameter['orderside'].str.upper()
-        parameter['method'] = parameter['method'].str.upper()
-        
         if code == 'NRE_SI_PSL':
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
+        
+        if code == 'NRE_CC_RE_TillTime_PSL':
+            parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time <= pd.to_datetime(parameter['till_time'], format='%H:%M:%S').dt.time]
 
 
     elif (code == 'RED') or (code == 'RED_SI') or (code == 'REDW'):

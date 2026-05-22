@@ -80,6 +80,28 @@ def check_parquet_file(file):
     except Exception as e:
         return (f"Invalid file: {file} | Error: {e}")
 
+
+def pick_extra_columns(available_cols):
+    if not available_cols:
+        return []
+
+    print("\nAvailable extra columns:")
+    for i, c in enumerate(available_cols, 1):
+        print(f"  [{i:3d}] {c}")
+
+    raw = input("\nEnter indices separated by space (e.g. 1 3 7), blank for none: ").strip()
+    if not raw:
+        return []
+
+    selected = []
+    for token in raw.split():
+        if token.isdigit():
+            idx = int(token) - 1
+            if 0 <= idx < len(available_cols):
+                selected.append(available_cols[idx])
+    return selected
+
+
 if __name__ == "__main__":
 
     title = "Combine By ParameterWise"
@@ -115,7 +137,28 @@ if __name__ == "__main__":
         input("Press Enter to Exit !!!")
         sys.exit(0)
 
-    only_mtm_col = get_bool_input("Grouping with MTM columns only?")
+    # ── NEW: 3-way column selection mode ────────────────────────────────────
+    print("\nColumn selection mode:")
+    print("  [1] All columns                (heaviest memory)")
+    print("  [2] Parameter + PNL only       (lightest memory)")
+    print("  [3] Parameter + PNL + custom extras (you pick)")
+    mode_raw = input("Choose 1 / 2 / 3 (default = 2): ").strip()
+
+    if mode_raw == '1':
+        col_mode = "all"
+        selected_others = list(others_columns)
+    elif mode_raw == '3':
+        col_mode = "custom"
+        selected_others = pick_extra_columns(others_columns)
+    else:
+        col_mode = "mtm"
+        selected_others = []
+
+    print(f"\nMode: {col_mode}")
+    print(f"Extra columns kept ({len(selected_others)}): "
+          f"{', '.join(selected_others) if selected_others else '(none)'}")
+    # ─────────────────────────────────────────────────────────────────────────
+
     use_polars = get_bool_input("Use Polars (fastest) instead of (Pandas/Dask)?")
     
     ### checking parquet files
@@ -153,6 +196,15 @@ if __name__ == "__main__":
     
     t1 = time.time()
 
+    # The exact set of columns to read from each parquet file.
+    # None means "read everything" (the original behavior for 'all' mode).
+    if col_mode == "all":
+        read_columns = None
+        others_to_cast = others_columns
+    else:
+        read_columns = name_columns + pnl_columns + selected_others
+        others_to_cast = selected_others
+
     print('\nBuilding ParameterWise Files... \n')
     for index in indices:
         
@@ -170,26 +222,22 @@ if __name__ == "__main__":
                 if use_polars:
                     
                     def read_and_cast(path):
-                        df = pl.read_parquet(path, columns=(name_columns + pnl_columns) if only_mtm_col else None)
+                        df = pl.read_parquet(path, columns=read_columns)
                         
-                        if only_mtm_col:
-                            return df.with_columns([
-                                pl.col(name_columns).cast(pl.Utf8).cast(pl.Categorical),
-                                pl.col(pnl_columns).cast(pl.Float64),
-                            ])
-                        else:
-                            return df.with_columns([
-                                pl.col(name_columns).cast(pl.Utf8).cast(pl.Categorical),
-                                pl.col(pnl_columns).cast(pl.Float64),
-                                pl.col(others_columns).cast(pl.Utf8)
-                            ])
+                        cast_exprs = [
+                            pl.col(name_columns).cast(pl.Utf8).cast(pl.Categorical),
+                            pl.col(pnl_columns).cast(pl.Float64),
+                        ]
+                        if others_to_cast:
+                            cast_exprs.append(pl.col(others_to_cast).cast(pl.Utf8))
+                        return df.with_columns(cast_exprs)
 
                     with concurrent.futures.ThreadPoolExecutor() as exe:
                         dfs = list(exe.map(read_and_cast, chunks_file))
                 
                     df = pl.concat(dfs)                    
                 else:
-                    df = dd.read_parquet(chunks_file, columns=(name_columns+pnl_columns) if only_mtm_col else None)
+                    df = dd.read_parquet(chunks_file, columns=read_columns)
                     df = df.compute()
                     
                 print('Reading Complete...')
@@ -225,4 +273,3 @@ if __name__ == "__main__":
     minutes, seconds = divmod(t2 - t1, 60)
     print(f"\nTotal Time Taken: {int(minutes)} minutes and {round(seconds, 2)} seconds.\n")
     input("Press Enter to Exit !!!")
-    

@@ -1,0 +1,2 @@
+entry_time,exit_time,orderside,method,lots
+09:15:00,15:25:00,SELL,HL,30

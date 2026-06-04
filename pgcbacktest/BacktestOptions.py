@@ -182,7 +182,7 @@ class IntradayBacktest:
 
     token, group_id = '5156026417:AAExQbrMAPrV0qI8tSYplFDjZltLBzXTm1w', '-607631145'
 
-    def __init__(self, pickle_path, index, current_date, dte, start_time, end_time):
+    def __init__(self, pickle_path, index, current_date, dte, start_time, end_time, gap=None):
         
         self.pickle_path, self.index, self.current_date, self.dte, self.meta_start_time, self.meta_end_time = pickle_path, index, current_date, dte, start_time, end_time
         self.__future_pickle_path, self.__option_pickle_path = self.get_future_option_path(index)
@@ -211,8 +211,16 @@ class IntradayBacktest:
         
         self.options = self.options[["scrip", "date_time", "open", "high", "low", "close"]]
         self.options = self.options[(self.options['date_time'].dt.time >= self.meta_start_time) & (self.options['date_time'].dt.time <= self.meta_end_time)]
+        
+        self.gap = self.get_gap() if gap is None else gap
+
+        if gap is not None:
+            # Drop any strike that is not an exact multiple of the gap (relevant when gap is set manually)
+            strikes = self.options['scrip'].str[:-2].astype(float)
+            remainder = strikes % self.gap
+            self.options = self.options[np.isclose(remainder, 0) | np.isclose(remainder, self.gap)]
+
         self.options_data = self.options.set_index(['date_time', 'scrip'])
-        self.gap = self.get_gap()
         self.tick_size = self.TICKS.get(self.index.lower(), 0.05)
         self._slipage_rate = self.SLIPAGES.get(self.index.lower(), 0.01)
         
@@ -433,7 +441,7 @@ class IntradayBacktest:
 
         return None, None, None, None, None, None
 
-    def get_strangle_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1):
+    def get_strangle_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1, strangle_select="above", strangle_low=2, strangle_high=3):
 
         valid_times = self.future_data.loc[start_dt:end_dt].index
         for current_dt in valid_times:
@@ -443,7 +451,15 @@ class IntradayBacktest:
                 target = one_om * om if target is None else target
                 dt_options = self._options_by_dt.get(current_dt)
                 if dt_options is None: continue
-                target_od = dt_options[dt_options['close'] >= target * tf].sort_values(by=['close'])
+
+                if strangle_select == "closest":
+                    dt_options = dt_options.copy()
+                    dt_options['_abs_diff'] = (dt_options['close'] - target * tf).abs()
+                    target_od = dt_options.sort_values(by=['_abs_diff'])
+                elif strangle_select == "below":
+                    target_od = dt_options[dt_options['close'] <= target * tf].sort_values(by=['close'], ascending=False)
+                else:  # "above" (default)
+                    target_od = dt_options[dt_options['close'] >= target * tf].sort_values(by=['close'])
                 
                 ce_scrip = target_od.loc[target_od['scrip'].str.endswith('CE'), 'scrip'].iloc[0]
                 pe_scrip = target_od.loc[target_od['scrip'].str.endswith('PE'), 'scrip'].iloc[0]
@@ -463,19 +479,19 @@ class IntradayBacktest:
                         put_list_prices.append(0)
                 
                 call, put, min_diff = call_list_prices[0], put_list_prices[0], float('inf')
-                target_2, target_3 = target*2*tf, target*3
+                target_low, target_high = target*strangle_low*tf, target*strangle_high
 
                 diff = abs(put-call)
                 required_call, required_put = None, None
-                if (put+call >= target_2) & (min_diff > diff) & (put+call <= target_3):
+                if (put+call >= target_low) & (min_diff > diff) & (put+call <= target_high):
                     min_diff = diff
                     required_call, required_put = call, put            
 
                 for i in range(1,3):
-                    if (min_diff > abs(put_list_prices[i] - call)) & (put_list_prices[i]+call >= target_2) & (put_list_prices[i]+call <= target_3):
+                    if (min_diff > abs(put_list_prices[i] - call)) & (put_list_prices[i]+call >= target_low) & (put_list_prices[i]+call <= target_high):
                         min_diff = abs(put_list_prices[i] - call)
                         required_call, required_put = call, put_list_prices[i]
-                    if (min_diff > abs(call_list_prices[i] - put)) & (call_list_prices[i]+put >= target_2) & (call_list_prices[i]+put <= target_3):
+                    if (min_diff > abs(call_list_prices[i] - put)) & (call_list_prices[i]+put >= target_low) & (call_list_prices[i]+put <= target_high):
                         min_diff = abs(call_list_prices[i] - put)
                         required_call, required_put = call_list_prices[i], put
 
@@ -530,7 +546,7 @@ class IntradayBacktest:
             
         return None, None, None, None, None, None
 
-    def _get_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1, only=None, obove_target_only=None, SDroundoff=False):
+    def _get_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1, only=None, obove_target_only=None, strangle_select="above", SDroundoff=False, strangle_low=2, strangle_high=3):
 
         if "-I" in str(om).upper().replace(' ', ''):
             om = str(om).upper().replace(' ', '').replace("-I", "")
@@ -569,7 +585,7 @@ class IntradayBacktest:
             if (om is None or om <= 0) and target is None:
                 ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_straddle_strike(start_dt, end_dt, sd=sd, atm=atm, SDroundoff=SDroundoff)
             else:
-                ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_strangle_strike(start_dt, end_dt, om=om, target=target, check_inverted=check_inverted, tf=tf)
+                ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_strangle_strike(start_dt, end_dt, om=om, target=target, check_inverted=check_inverted, tf=tf, strangle_select=strangle_select, strangle_low=strangle_low, strangle_high=strangle_high)
                 
         if only is None:
             return ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt
@@ -1626,8 +1642,8 @@ class IntradayBacktest:
 
 class WeeklyBacktest(IntradayBacktest):
 
-    def __init__(self, pickle_path, index, week_dates, from_dte, to_dte, start_time, end_time):
-        
+    def __init__(self, pickle_path, index, week_dates, from_dte, to_dte, start_time, end_time, gap=None):
+
         self.pickle_path, self.index, self.week_dates, self.from_dte, self.to_dte, self.meta_start_time, self.meta_end_time = pickle_path, index, week_dates, from_dte, to_dte, start_time, end_time
         
         self.current_week_dates = sorted(set(([self.week_dates[0]] * (99 - len(self.week_dates)) + self.week_dates)[-from_dte : None if to_dte == 1 else -to_dte + 1]))
@@ -1664,8 +1680,16 @@ class WeeklyBacktest(IntradayBacktest):
         self.options = pd.concat(option_data_list)
         self.options = self.options[(self.options['date_time'].dt.time >= start_time) & (self.options['date_time'].dt.time <= end_time)]
         self.options = self.options[["scrip", "date_time", "open", "high", "low", "close"]]
+
+        self.gap = self.get_gap() if gap is None else gap
+
+        if gap is not None:
+            # Drop any strike that is not an exact multiple of the gap (relevant when gap is set manually)
+            strikes = self.options['scrip'].str[:-2].astype(float)
+            remainder = strikes % self.gap
+            self.options = self.options[np.isclose(remainder, 0) | np.isclose(remainder, self.gap)]
+
         self.options_data = self.options.set_index(['date_time', 'scrip'])
-        self.gap = self.get_gap()
         self.tick_size = self.TICKS.get(index.lower(), 0.05)
         self._slipage_rate = self.SLIPAGES.get(self.index.lower(), 0.01)
 
@@ -1856,7 +1880,7 @@ class WeeklyBacktest(IntradayBacktest):
 
         return None, None, None, None, None, None
 
-    def get_strangle_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1):
+    def get_strangle_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1, strangle_select="above", strangle_low=2, strangle_high=3):
 
         current_date = start_dt.date()
         valid_times = self.future_data.loc[start_dt:end_dt].index
@@ -1867,7 +1891,15 @@ class WeeklyBacktest(IntradayBacktest):
                 target = one_om * om if target is None else target
                 dt_options = self._options_by_dt.get(current_dt)
                 if dt_options is None: continue
-                target_od = dt_options[dt_options['close'] >= target * tf].sort_values(by=['close'])
+
+                if strangle_select == "closest":
+                    dt_options = dt_options.copy()
+                    dt_options['_abs_diff'] = (dt_options['close'] - target * tf).abs()
+                    target_od = dt_options.sort_values(by=['_abs_diff'])
+                elif strangle_select == "below":
+                    target_od = dt_options[dt_options['close'] <= target * tf].sort_values(by=['close'], ascending=False)
+                else:  # "above" (default)
+                    target_od = dt_options[dt_options['close'] >= target * tf].sort_values(by=['close'])
                 
                 ce_scrip = target_od.loc[target_od['scrip'].str.endswith('CE'), 'scrip'].iloc[0]
                 pe_scrip = target_od.loc[target_od['scrip'].str.endswith('PE'), 'scrip'].iloc[0]
@@ -1887,19 +1919,19 @@ class WeeklyBacktest(IntradayBacktest):
                         put_list_prices.append(0)
                 
                 call, put, min_diff = call_list_prices[0], put_list_prices[0], float('inf')
-                target_2, target_3 = target*2*tf, target*3
+                target_low, target_high = target*strangle_low*tf, target*strangle_high
 
                 diff = abs(put-call)
                 required_call, required_put = None, None
-                if (put+call >= target_2) & (min_diff > diff) & (put+call <= target_3):
+                if (put+call >= target_low) & (min_diff > diff) & (put+call <= target_high):
                     min_diff = diff
-                    required_call, required_put = call, put            
+                    required_call, required_put = call, put
 
                 for i in range(1,3):
-                    if (min_diff > abs(put_list_prices[i] - call)) & (put_list_prices[i]+call >= target_2) & (put_list_prices[i]+call <= target_3):
+                    if (min_diff > abs(put_list_prices[i] - call)) & (put_list_prices[i]+call >= target_low) & (put_list_prices[i]+call <= target_high):
                         min_diff = abs(put_list_prices[i] - call)
                         required_call, required_put = call, put_list_prices[i]
-                    if (min_diff > abs(call_list_prices[i] - put)) & (call_list_prices[i]+put >= target_2) & (call_list_prices[i]+put <= target_3):
+                    if (min_diff > abs(call_list_prices[i] - put)) & (call_list_prices[i]+put >= target_low) & (call_list_prices[i]+put <= target_high):
                         min_diff = abs(call_list_prices[i] - put)
                         required_call, required_put = call_list_prices[i], put
 
@@ -1955,7 +1987,7 @@ class WeeklyBacktest(IntradayBacktest):
 
         return None, None, None, None, None, None
 
-    def _get_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1, only=None, obove_target_only=None, SDroundoff=False):
+    def _get_strike(self, start_dt, end_dt, om=None, target=None, check_inverted=False, tf=1, only=None, obove_target_only=None, strangle_select="above", SDroundoff=False, strangle_low=2, strangle_high=3):
 
         if "-I" in str(om).upper().replace(' ', ''):
             om = str(om).upper().replace(' ', '').replace("-I", "")
@@ -1994,7 +2026,7 @@ class WeeklyBacktest(IntradayBacktest):
             if (om is None or om <= 0) and target is None:
                 ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_straddle_strike(start_dt, end_dt, sd=sd, atm=atm, SDroundoff=SDroundoff)
             else:
-                ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_strangle_strike(start_dt, end_dt, om=om, target=target, check_inverted=check_inverted, tf=tf)
+                ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt = self.get_strangle_strike(start_dt, end_dt, om=om, target=target, check_inverted=check_inverted, tf=tf, strangle_select=strangle_select, strangle_low=strangle_low, strangle_high=strangle_high)
                 
         if only is None:
             return ce_scrip, pe_scrip, ce_price, pe_price, future_price, start_dt

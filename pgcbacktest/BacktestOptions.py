@@ -182,43 +182,59 @@ class IntradayBacktest:
 
     token, group_id = '5156026417:AAExQbrMAPrV0qI8tSYplFDjZltLBzXTm1w', '-607631145'
 
-    def __init__(self, pickle_path, index, current_date, dte, start_time, end_time, gap=None):
+    # In-memory cache of processed data, shared across all instances in this process.
+    _MEMORY_CACHE = {}
+    _SPOT_CACHE = {}
+
+    def __init__(self, pickle_path, index, current_date, dte, start_time, end_time, gap=None, cache=False):
         
         self.pickle_path, self.index, self.current_date, self.dte, self.meta_start_time, self.meta_end_time = pickle_path, index, current_date, dte, start_time, end_time
         self.__future_pickle_path, self.__option_pickle_path = self.get_future_option_path(index)
 
-        future_parquet_path = self.__future_pickle_path.format(date=self.current_date.date(), extn='parquet')
-        future_pickle_path = self.__future_pickle_path.format(date=self.current_date.date(), extn='pkl')
-
-        if os.path.exists(future_parquet_path):
-            self.future_data = pd.read_parquet(future_parquet_path).set_index(['date_time'])
-        elif os.path.exists(future_pickle_path):
-            self.future_data = pd.read_pickle(future_pickle_path).set_index(['date_time'])
+        cache_key = (pickle_path, index.lower(), str(self.current_date.date()), str(start_time), str(end_time), gap) if cache else None
+        if cache and cache_key in self._MEMORY_CACHE:
+            store = self._MEMORY_CACHE[cache_key]
+            self.future_data, self.options, self.gap = store['future_data'], store['options'], store['gap']
         else:
-            raise FileNotFoundError(f"Future data file not found for {self.index} on {self.current_date.date()}")
+            future_parquet_path = self.__future_pickle_path.format(date=self.current_date.date(), extn='parquet')
+            future_pickle_path = self.__future_pickle_path.format(date=self.current_date.date(), extn='pkl')
+
+            if os.path.exists(future_parquet_path):
+                self.future_data = pd.read_parquet(future_parquet_path).set_index(['date_time'])
+            elif os.path.exists(future_pickle_path):
+                self.future_data = pd.read_pickle(future_pickle_path).set_index(['date_time'])
+            else:
+                raise FileNotFoundError(f"Future data file not found for {self.index} on {self.current_date.date()}")
             
-        self.future_data = self.future_data[["open", "high", "low", "close"]]
+            self.future_data = self.future_data[["open", "high", "low", "close"]]
         
-        option_parquet_path = self.__option_pickle_path.format(date=self.current_date.date(), extn='parquet')
-        option_pickle_path = self.__option_pickle_path.format(date=self.current_date.date(), extn='pkl')
+            option_parquet_path = self.__option_pickle_path.format(date=self.current_date.date(), extn='parquet')
+            option_pickle_path = self.__option_pickle_path.format(date=self.current_date.date(), extn='pkl')
         
-        if os.path.exists(option_parquet_path):
-            self.options = pd.read_parquet(option_parquet_path)
-        elif os.path.exists(option_pickle_path):
-            self.options = pd.read_pickle(option_pickle_path)
-        else:
-            raise FileNotFoundError(f"Option data file not found for {self.index} on {self.current_date.date()}")
+            if os.path.exists(option_parquet_path):
+                self.options = pd.read_parquet(option_parquet_path)
+            elif os.path.exists(option_pickle_path):
+                self.options = pd.read_pickle(option_pickle_path)
+            else:
+                raise FileNotFoundError(f"Option data file not found for {self.index} on {self.current_date.date()}")
         
-        self.options = self.options[["scrip", "date_time", "open", "high", "low", "close"]]
-        self.options = self.options[(self.options['date_time'].dt.time >= self.meta_start_time) & (self.options['date_time'].dt.time <= self.meta_end_time)]
+            self.options = self.options[["scrip", "date_time", "open", "high", "low", "close"]]
+            self.options = self.options[(self.options['date_time'].dt.time >= self.meta_start_time) & (self.options['date_time'].dt.time <= self.meta_end_time)]
         
-        self.gap = self.get_gap() if gap is None else gap
+            self.gap = self.get_gap() if gap is None else gap
 
-        if gap is not None:
-            # Drop any strike that is not an exact multiple of the gap (relevant when gap is set manually)
-            strikes = self.options['scrip'].str[:-2].astype(float)
-            remainder = strikes % self.gap
-            self.options = self.options[np.isclose(remainder, 0) | np.isclose(remainder, self.gap)]
+            if gap is not None:
+                # Drop any strike that is not an exact multiple of the gap (relevant when gap is set manually)
+                strikes = self.options['scrip'].str[:-2].astype(float)
+                remainder = strikes % self.gap
+                self.options = self.options[np.isclose(remainder, 0) | np.isclose(remainder, self.gap)]
+
+            if cache:
+                self._MEMORY_CACHE[cache_key] = {
+                    'future_data': self.future_data,
+                    'options': self.options,
+                    'gap': self.gap,
+                }
 
         self.options_data = self.options.set_index(['date_time', 'scrip'])
         self.tick_size = self.TICKS.get(self.index.lower(), 0.05)
@@ -270,18 +286,22 @@ class IntradayBacktest:
         return future_pickle_path, option_pickle_path
     
     def get_spot_data(self, index, date=None):
-        try:
-            spot_pickle_path = f'{self.pickle_path}/_indices/{index}.parquet'
-            spot_data = pd.read_parquet(spot_pickle_path).set_index('date_time')
-            spot_data = spot_data[["open", "high", "low", "close"]]
+        key = (self.pickle_path, index)
+        if key not in self._SPOT_CACHE:
+            try:
+                spot_pickle_path = f'{self.pickle_path}/_indices/{index}.parquet'
+                spot_data = pd.read_parquet(spot_pickle_path).set_index('date_time')
+                spot_data = spot_data[["open", "high", "low", "close"]]
+            except Exception:
+                spot_data = pd.DataFrame(columns=['scrip', 'date_time', 'open', 'high', 'low', 'close', 'volume', 'openinterest']).set_index('date_time')
+                
+            self._SPOT_CACHE[key] = spot_data
+        else:
+            spot_data = self._SPOT_CACHE[key]
             
-            if date:
-                date = pd.to_datetime(date)
-                spot_data = spot_data[spot_data.index.date == date.date()]
-            
-        except:
-            spot_data = pd.DataFrame(columns=['scrip', 'date_time', 'open', 'high', 'low', 'close', 'volume', 'openinterest']).set_index('date_time')
-            
+        if date:
+            date = pd.to_datetime(date)
+            spot_data = spot_data[spot_data.index.date == date.date()]
         return spot_data
 
     def Cal_slipage(self, price):
@@ -670,7 +690,6 @@ class IntradayBacktest:
             pnl = round(pnl - slipage, 2)
 
             if per_minute_mtm:
-                
                 dt_vals = scrip_df['date_time'].values
                 close_vals = scrip_df['close'].values
                 if exit_time:
@@ -1709,6 +1728,9 @@ class WeeklyBacktest(IntradayBacktest):
         for dt, group in self.options.groupby('date_time', sort=False, observed=True):
             self._options_by_dt[dt] = group
 
+        # Spot data across the week's dates (uses the shared per-index spot cache)
+        self.spot_data = pd.concat([self.get_spot_data(index, date=current_date) for current_date in self.current_week_dates])
+
         if self.index in NSE_INDICES:
             self.market = 'NSE'
         elif self.index in BSE_INDICES:
@@ -2116,7 +2138,6 @@ class WeeklyBacktest(IntradayBacktest):
             pnl = round(pnl - slipage, 2)
 
             if per_minute_mtm:
-                
                 dt_vals = scrip_df['date_time'].values
                 close_vals = scrip_df['close'].values
                 if exit_time:
@@ -2171,7 +2192,12 @@ class WeeklyBacktest(IntradayBacktest):
             if from_next_minute: scrip_df = scrip_df.iloc[1:]
             if scrip_df.empty: raise DataEmptyError
 
-            h, l, c = scrip_df['high'].max(), scrip_df['low'].min(), scrip_df['close'].iloc[-1]
+            highs = scrip_df['high'].values
+            lows = scrip_df['low'].values
+            closes = scrip_df['close'].values
+            datetimes = scrip_df['date_time'].values
+
+            h, l, c = highs.max(), lows.min(), closes[-1]
 
             if orderside == 'SELL':
                 sl_price_val = (((100 + sl) / 100) * o if sl_price is None else sl_price) if (sl or sl_price) else (h + 1)
@@ -2183,9 +2209,9 @@ class WeeklyBacktest(IntradayBacktest):
                     intra_sl_price = self.round_to_ticksize(intra_sl_price, orderside, 'STOPLOSS')
                     target_price = self.round_to_ticksize(target_price, orderside, 'TARGET')
 
-                mask_intra_sl = scrip_df['high'] >= intra_sl_price
-                mask_sl = (scrip_df['close'] if from_candle_close else scrip_df['high']) >= sl_price_val
-                mask_target = scrip_df['low'] <= target_price
+                mask_intra_sl = highs >= intra_sl_price
+                mask_sl = (closes if from_candle_close else highs) >= sl_price_val
+                mask_target = lows <= target_price
 
             elif orderside == 'BUY':
                 sl_price_val = (((100 - sl) / 100) * o if sl_price is None else sl_price) if (sl or sl_price) else (l - 1)
@@ -2197,34 +2223,35 @@ class WeeklyBacktest(IntradayBacktest):
                     intra_sl_price = self.round_to_ticksize(intra_sl_price, orderside, 'STOPLOSS')
                     target_price = self.round_to_ticksize(target_price, orderside, 'TARGET')
 
-                mask_intra_sl = scrip_df['low'] <= intra_sl_price
-                mask_sl = (scrip_df['close'] if from_candle_close else scrip_df['low']) <= sl_price_val
-                mask_target = scrip_df['high'] >= target_price
+                mask_intra_sl = lows <= intra_sl_price
+                mask_sl = (closes if from_candle_close else lows) <= sl_price_val
+                mask_target = highs >= target_price
 
             combined_mask = mask_intra_sl | mask_sl | mask_target
 
             if combined_mask.any():
-                exit_row = scrip_df.loc[combined_mask.idxmax()]
-                exit_time = exit_row['date_time']
+                idx = np.argmax(combined_mask)
+                exit_time = pd.Timestamp(datetimes[idx])
+                exit_high, exit_low, exit_close = highs[idx], lows[idx], closes[idx]
 
                 if orderside == 'SELL':
-                    if exit_row['high'] >= intra_sl_price:
+                    if exit_high >= intra_sl_price:
                         sl_flag, intra_sl_flag = True, True
                         exit_price = intra_sl_price
-                    elif (exit_row['close'] if from_candle_close else exit_row['high']) >= sl_price_val:
+                    elif (exit_close if from_candle_close else exit_high) >= sl_price_val:
                         sl_flag = True
-                        exit_price = exit_row['close'] if from_candle_close else sl_price_val 
-                    elif exit_row['low'] <= target_price:
+                        exit_price = exit_close if from_candle_close else sl_price_val
+                    elif exit_low <= target_price:
                         target_flag = True
                         exit_price = target_price
                 elif orderside == 'BUY':
-                    if exit_row['low'] <= intra_sl_price:
+                    if exit_low <= intra_sl_price:
                         sl_flag, intra_sl_flag = True, True
                         exit_price = intra_sl_price
-                    elif (exit_row['close'] if from_candle_close else exit_row['low']) <= sl_price_val:
+                    elif (exit_close if from_candle_close else exit_low) <= sl_price_val:
                         sl_flag = True
-                        exit_price = exit_row['close'] if from_candle_close else sl_price_val
-                    elif exit_row['high'] >= target_price:
+                        exit_price = exit_close if from_candle_close else sl_price_val
+                    elif exit_high >= target_price:
                         target_flag = True
                         exit_price = target_price
             else:
@@ -2237,7 +2264,6 @@ class WeeklyBacktest(IntradayBacktest):
             pnl = round(pnl - slipage, 2)
 
             if per_minute_mtm:
-                
                 dt_vals = scrip_df['date_time'].values
                 close_vals = scrip_df['close'].values
                 if exit_time:
@@ -2292,7 +2318,12 @@ class WeeklyBacktest(IntradayBacktest):
             if from_next_minute: scrip_df = scrip_df.iloc[1:]
             if scrip_df.empty: raise DataEmptyError
 
-            h, l, cl, ch, c = scrip_df['high'].max(), scrip_df['low'].min(), scrip_df['close'].min(), scrip_df['close'].max() , scrip_df['close'].iloc[-1]
+            highs = scrip_df['high'].values
+            lows = scrip_df['low'].values
+            closes = scrip_df['close'].values
+            datetimes = scrip_df['date_time'].values
+
+            h, l, cl, ch, c = highs.max(), lows.min(), closes.min(), closes.max(), closes[-1]
 
             if orderside == 'SELL':
                 sl_price_val = (((100 + sl) / 100) * o if sl_price is None else sl_price) if (sl or sl_price) else (ch + 1)
@@ -2304,9 +2335,9 @@ class WeeklyBacktest(IntradayBacktest):
                     intra_sl_price_val = self.round_to_ticksize(intra_sl_price_val, orderside, 'STOPLOSS')
                     target_price = self.round_to_ticksize(target_price, orderside, 'TARGET')
 
-                mask_intra_sl = scrip_df['high'] >= intra_sl_price_val
-                mask_sl = scrip_df['close'] >= sl_price_val
-                mask_target = scrip_df['close'] <= target_price
+                mask_intra_sl = highs >= intra_sl_price_val
+                mask_sl = closes >= sl_price_val
+                mask_target = closes <= target_price
 
             elif orderside == 'BUY':
                 sl_price_val = (((100 - sl) / 100) * o if sl_price is None else sl_price) if (sl or sl_price) else (cl - 1)
@@ -2318,36 +2349,37 @@ class WeeklyBacktest(IntradayBacktest):
                     intra_sl_price_val = self.round_to_ticksize(intra_sl_price_val, orderside, 'STOPLOSS')
                     target_price = self.round_to_ticksize(target_price, orderside, 'TARGET')
 
-                mask_intra_sl = scrip_df['low'] <= intra_sl_price_val
-                mask_sl = scrip_df['close'] <= sl_price_val
-                mask_target = scrip_df['close'] >= target_price
+                mask_intra_sl = lows <= intra_sl_price_val
+                mask_sl = closes <= sl_price_val
+                mask_target = closes >= target_price
 
             combined_mask = mask_intra_sl | mask_sl | mask_target
 
             if combined_mask.any():
-                exit_row = scrip_df.loc[combined_mask.idxmax()]
-                exit_time = exit_row['date_time']
+                idx = np.argmax(combined_mask)
+                exit_time = pd.Timestamp(datetimes[idx])
+                exit_high, exit_low, exit_close = highs[idx], lows[idx], closes[idx]
 
                 if orderside == 'SELL':
-                    if exit_row['high'] >= intra_sl_price_val:
+                    if exit_high >= intra_sl_price_val:
                         sl_flag, intra_sl_flag = True, True
                         exit_price = intra_sl_price_val
-                    elif exit_row['close'] >= sl_price_val:
+                    elif exit_close >= sl_price_val:
                         sl_flag = True
-                        exit_price = exit_row['close']
-                    elif exit_row['close'] <= target_price:
+                        exit_price = exit_close
+                    elif exit_close <= target_price:
                         target_flag = True
-                        exit_price = exit_row['close']
+                        exit_price = exit_close
                 elif orderside == 'BUY':
-                    if exit_row['low'] <= intra_sl_price_val:
+                    if exit_low <= intra_sl_price_val:
                         sl_flag, intra_sl_flag = True, True
                         exit_price = intra_sl_price_val
-                    elif exit_row['close'] <= sl_price_val:
+                    elif exit_close <= sl_price_val:
                         sl_flag = True
-                        exit_price = exit_row['close']
-                    elif exit_row['close'] >= target_price:
+                        exit_price = exit_close
+                    elif exit_close >= target_price:
                         target_flag = True
-                        exit_price = exit_row['close']
+                        exit_price = exit_close
             else:
                 exit_price = c
 
@@ -2358,7 +2390,6 @@ class WeeklyBacktest(IntradayBacktest):
             pnl = round(pnl - slipage, 2)
 
             if per_minute_mtm:
-                
                 dt_vals = scrip_df['date_time'].values
                 close_vals = scrip_df['close'].values
                 if exit_time:
@@ -2478,7 +2509,6 @@ class WeeklyBacktest(IntradayBacktest):
             pnl = round(pnl - slipage, 2)
 
             if per_minute_mtm:
-                
                 dt_vals = scrip_df['date_time'].values
                 close_vals = scrip_df['close'].values
                 if exit_time:
@@ -2607,7 +2637,6 @@ class WeeklyBacktest(IntradayBacktest):
             pnl = round(pnl - slipage, 2)
 
             if per_minute_mtm:
-                
                 dt_vals = scrip_df['date_time'].values
                 close_vals = scrip_df['close'].values
                 if exit_time:
@@ -2667,7 +2696,12 @@ class WeeklyBacktest(IntradayBacktest):
             if from_next_minute: scrip_df = scrip_df.iloc[1:]
             if scrip_df.empty: raise DataEmptyError
                 
-            h, l, c = scrip_df['high'].max(), scrip_df['low'].min(), scrip_df['close'].iloc[-1]
+            highs = scrip_df['high'].values
+            lows = scrip_df['low'].values
+            closes = scrip_df['close'].values
+            datetimes = scrip_df['date_time'].values
+
+            h, l, c = highs.max(), lows.min(), closes[-1]
             
             if decay == 0 or decay_price == -1:
                 decay_price = o
@@ -2680,7 +2714,7 @@ class WeeklyBacktest(IntradayBacktest):
                     if roundtick or self.market == 'MCX':
                         decay_price = self.round_to_ticksize(decay_price, orderside, 'DECAY')
                     
-                    mask_decay = (scrip_df['close'] if from_candle_close else scrip_df['low']) <= decay_price
+                    mask_decay = (closes if from_candle_close else lows) <= decay_price
 
                 elif orderside == 'BUY':
                     decay_price = ((100 + decay)/100) * o if decay_price is None else decay_price
@@ -2688,11 +2722,12 @@ class WeeklyBacktest(IntradayBacktest):
                     if roundtick or self.market == 'MCX':
                         decay_price = self.round_to_ticksize(decay_price, orderside, 'DECAY')
                     
-                    mask_decay = (scrip_df['close'] if from_candle_close else scrip_df['high']) >= decay_price
+                    mask_decay = (closes if from_candle_close else highs) >= decay_price
 
                 if mask_decay.any():
                     decay_flag = True
-                    decay_time = scrip_df.loc[mask_decay.idxmax(), 'date_time']
+                    idx = np.argmax(mask_decay)
+                    decay_time = pd.Timestamp(datetimes[idx])
 
         except DataEmptyError:
             decay_flag, decay_time = False, ''

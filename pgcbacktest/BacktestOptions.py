@@ -294,7 +294,8 @@ class IntradayBacktest:
                 spot_data = spot_data[["open", "high", "low", "close"]]
             except Exception:
                 spot_data = pd.DataFrame(columns=['scrip', 'date_time', 'open', 'high', 'low', 'close', 'volume', 'openinterest']).set_index('date_time')
-                
+
+            spot_data.index = pd.to_datetime(spot_data.index)
             self._SPOT_CACHE[key] = spot_data
         else:
             spot_data = self._SPOT_CACHE[key]

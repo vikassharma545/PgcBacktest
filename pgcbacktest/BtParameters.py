@@ -568,7 +568,7 @@ def get_parameter_data(code, parameter_path):
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
             
     
-    elif (code == 'STARGET'):
+    elif (code == 'STARGET') or (code == 'ITARGET'):
 
         #filer intra sl
         parameter['intra_sl'] = parameter.apply(lambda row: row['sl'] + float(row['intra_sl'].split('+')[-1]) if '+' in str(row['intra_sl']) else float(row['intra_sl']), axis=1)

@@ -118,7 +118,26 @@ def get_parameter_data(code, parameter_path):
         parameter['orderside'] = parameter['orderside'].str.upper()
         parameter['method'] = parameter['method'].str.upper()
 
-    elif (code == 'B120_PSL') or (code == 'B120_SI_PSL') or (code == 'B120W_PSL'):
+    if (code == 'B120_NO_UT_TRAIL'):
+    
+        parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
+        
+        parameter['orderside'] = parameter['orderside'].str.upper()
+        parameter['method'] = parameter['method'].str.upper()
+        
+    elif (code == 'B120_NO_UT_TRAIL_PSL'):
+        
+        # filter - entry < (exit_time|endtime - 5min)
+        parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time <= pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time]
+        parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
+        
+        parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
+        
+        parameter['trade_interval'] = parameter['trade_interval'].str.upper()
+        parameter['orderside'] = parameter['orderside'].str.upper()
+        parameter['method'] = parameter['method'].str.upper()
+
+    elif (code == 'B120_PSL') or (code == 'B120_SI_PSL') or (code == 'B120W_PSL') or (code == 'B120_UT_TRAIL_PSL'):
         
         # filter - entry < (exit_time|endtime - 5min)
         parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time <= pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time]

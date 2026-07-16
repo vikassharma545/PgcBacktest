@@ -1,0 +1,4 @@
+entry_time,exit_time,last_trade_time,trade_interval,orderside,method,sl,ut_sl,om,ut_trail,trail_upto_cost
+09:20:00,15:25:00,14:30:00,10min,sell,HL,20,TTC,0,0.4,FALSE
+,,,,,,25,50,1,0.5,TRUE
+,,,,,,30,,,0.7,

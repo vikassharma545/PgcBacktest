@@ -1186,9 +1186,9 @@ class IntradayBacktest:
             # ── RATIO: SL absorbs a fraction of profit ──
             elif trail_type == 'RATIO':
                 
-                if not (0 < trail_gap <= 1):
-                    raise ValueError(f"RATIO Trailing: 'trail_gap' must be between 0 and 1 (exclusive of 0). "
-                                    f"Received: {trail_gap}. (e.g., 0.5 absorbs 50% of profit).")
+                # if not (0 < trail_gap <= 1):
+                #     raise ValueError(f"RATIO Trailing: 'trail_gap' must be between 0 and 1 (exclusive of 0). "
+                #                     f"Received: {trail_gap}. (e.g., 0.5 absorbs 50% of profit).")
             
                 initial_sl = sl_price
                 best_price = o
@@ -1452,9 +1452,9 @@ class IntradayBacktest:
             # ── RATIO: SL absorbs a fraction of profit ──
             elif trail_type == 'RATIO':
                 
-                if not (0 < trail_gap <= 1):
-                    raise ValueError(f"RATIO Trailing: 'trail_gap' must be between 0 and 1 (exclusive of 0). "
-                                     f"Received: {trail_gap}. (e.g., 0.5 absorbs 50% of profit).")
+                # if not (0 < trail_gap <= 1):
+                #     raise ValueError(f"RATIO Trailing: 'trail_gap' must be between 0 and 1 (exclusive of 0). "
+                #                      f"Received: {trail_gap}. (e.g., 0.5 absorbs 50% of profit).")
                 
                 initial_sl = sl_price_val
                 initial_intra_sl = intra_sl_price_val

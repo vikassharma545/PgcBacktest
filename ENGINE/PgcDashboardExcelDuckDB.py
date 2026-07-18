@@ -584,7 +584,7 @@ if sys.platform == 'win32':
         right_rng.api.Borders(10).LineStyle = 1 
         
         data_rng = sheet.range((start_cell.row + 1, start_cell.column + 1), (last_row, last_col))
-        data_rng.number_format = "#,##0" 
+        data_rng.number_format = "#,##0.00"
 
         data_rng = sheet.range((start_cell.row + 1, start_cell.column + 1), (last_row-1, last_col-1))
         data_rng.api.FormatConditions.Delete()
@@ -706,7 +706,7 @@ if sys.platform == 'win32':
         rr.api.Borders(10).LineStyle = 1
 
         dr = dd_sheet.range((sc.row + 1, sc.column + 1), (lr, lc))
-        dr.number_format = "#,##0"
+        dr.number_format = "#,##0.00"
 
         if lr > sc.row + 1 and lc > 2:
             inner = dd_sheet.range((sc.row + 1, sc.column + 1), (lr - 1, lc - 1))
@@ -759,7 +759,7 @@ if sys.platform == 'win32':
             rr.api.Borders(10).LineStyle = 1
 
             dr = ws.range((sc.row + 1, sc.column + 1), (lr, lc))
-            dr.number_format = "#,##0"
+            dr.number_format = "#,##0.00"
 
             if lr > sc.row + 1 and lc > 2:
                 inner = ws.range((sc.row + 1, sc.column + 1), (lr - 1, lc - 1))
@@ -840,14 +840,6 @@ if sys.platform == 'win32':
         calmar['Grand Total'] = calmar.mean(axis=1).round(2)
 
         write_heatmap_sheet(wb, "Calmar Ratio", pivot_column, calmar)
-
-        # Force format for decimals in Calmar
-        calmar_ws = wb.sheets["Calmar Ratio"]
-        csc = calmar_ws.range("A2")
-        cft = csc.expand()
-        clr = cft.last_cell.row
-        clc = cft.last_cell.column
-        calmar_ws.range((csc.row + 1, csc.column + 1), (clr, clc)).number_format = "#,##0.00"
 
         st.toast("✅ Excel Updated!")
 else:

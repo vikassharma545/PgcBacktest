@@ -339,7 +339,7 @@ def get_parameter_data(code, parameter_path):
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
 
             
-    elif (code == 'NRE') or (code == 'NREW') or (code == 'NRE_SI') or (code == 'NRE_CC') or (code == 'NREW_CC') or (code == 'NRE_CC_RE_TillTime'):
+    elif (code == 'NRE') or (code == 'NREW') or (code == 'NRE_SI') or (code == 'NRE_CC') or (code == 'NREW_CC') or (code == 'NRE_CC_RE_TillTime') or (code == 'NRE_CC_TRAIL'):
         # filter - where sl = 0
         parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
         parameter.loc[parameter['sl'] == 0, 're_sl'] = 0

@@ -616,7 +616,7 @@ class IntradayBacktest:
             elif only == "PE":
                 return pe_scrip, pe_price, future_price, start_dt
             
-    def sl_check_by_given_data(self, scrip_df, o=None, sl=0, intra_sl=0, sl_price=None, target_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False, roundtick=False):
+    def sl_check_by_given_data(self, scrip_df, o=None, sl=0, intra_sl=0, sl_price=None, target=0, target_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False, roundtick=False):
         sl_flag, intra_sl_flag, target_flag, exit_time, pnl = False, False, False, '', 0
 
         try:
@@ -633,7 +633,7 @@ class IntradayBacktest:
             if orderside == 'SELL':
                 sl_price_val = (((100 + sl) / 100) * o if sl_price is None else sl_price) if (sl or sl_price) else (h + 1)
                 intra_sl_price = ((100 + intra_sl) / 100) * o if intra_sl else (h + 1)
-                target_price = target_price if target_price is not None else (l - 1)
+                target_price = (((100 - target) / 100) * o if target_price is None else target_price) if (target or target_price is not None) else (l - 1)
 
                 if roundtick or self.market == 'MCX':
                     sl_price_val = self.round_to_ticksize(sl_price_val, orderside, 'STOPLOSS')
@@ -647,7 +647,7 @@ class IntradayBacktest:
             elif orderside == 'BUY':
                 sl_price_val = (((100 - sl) / 100) * o if sl_price is None else sl_price) if (sl or sl_price) else (l - 1)
                 intra_sl_price = ((100 - intra_sl) / 100) * o if intra_sl else (l - 1)
-                target_price = target_price if target_price is not None else (h + 1)
+                target_price = (((100 + target) / 100) * o if target_price is None else target_price) if (target or target_price is not None) else (h + 1)
                 
                 if roundtick or self.market == 'MCX':
                     sl_price_val = self.round_to_ticksize(sl_price_val, orderside, 'STOPLOSS')
@@ -730,7 +730,7 @@ class IntradayBacktest:
             else:
                 return (sl_price, sl_flag, intra_sl_flag, target_flag, exit_time, pnl)
 
-    def _sl_check_single_leg(self, start_dt, end_dt, scrip, o=None, sl=0, intra_sl=0, sl_price=None, target_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False, roundtick=False):
+    def _sl_check_single_leg(self, start_dt, end_dt, scrip, o=None, sl=0, intra_sl=0, sl_price=None, target=0, target_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False, roundtick=False):
         sl_flag, intra_sl_flag, target_flag, exit_time, pnl = False, False, False, '', 0
 
         try:
@@ -753,7 +753,7 @@ class IntradayBacktest:
             if orderside == 'SELL':
                 sl_price_val = (((100 + sl) / 100) * o if sl_price is None else sl_price) if (sl or sl_price) else (h + 1)
                 intra_sl_price = ((100 + intra_sl) / 100) * o if intra_sl else (h + 1)
-                target_price = target_price if target_price is not None else (l - 1)
+                target_price = (((100 - target) / 100) * o if target_price is None else target_price) if (target or target_price is not None) else (l - 1)
                 
                 if roundtick or self.market == 'MCX':
                     sl_price_val = self.round_to_ticksize(sl_price_val, orderside, 'STOPLOSS')
@@ -767,7 +767,7 @@ class IntradayBacktest:
             elif orderside == 'BUY':
                 sl_price_val = (((100 - sl) / 100) * o if sl_price is None else sl_price) if (sl or sl_price) else (l - 1)
                 intra_sl_price = ((100 - intra_sl) / 100) * o if intra_sl else (l - 1)
-                target_price = target_price if target_price is not None else (h + 1)
+                target_price = (((100 + target) / 100) * o if target_price is None else target_price) if (target or target_price is not None) else (h + 1)
                 
                 if roundtick or self.market == 'MCX':
                     sl_price_val = self.round_to_ticksize(sl_price_val, orderside, 'STOPLOSS')
@@ -851,7 +851,7 @@ class IntradayBacktest:
             else:
                 return (sl_price, sl_flag, intra_sl_flag, target_flag, exit_time, pnl)
 
-    def _sl_check_combine_leg(self, start_dt, end_dt, ce_scrip, pe_scrip, o=None, sl=0, intra_sl=0, sl_price=None, intra_sl_price=None, target_price=None, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False, roundtick=False):
+    def _sl_check_combine_leg(self, start_dt, end_dt, ce_scrip, pe_scrip, o=None, sl=0, intra_sl=0, sl_price=None, intra_sl_price=None, target=0, target_price=None, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False, roundtick=False):
         sl_flag, intra_sl_flag, target_flag, exit_time, pnl = False, False, False, '', 0
 
         try:
@@ -874,7 +874,7 @@ class IntradayBacktest:
             if orderside == 'SELL':
                 sl_price_val = (((100 + sl) / 100) * o if sl_price is None else sl_price) if (sl or sl_price) else (ch + 1)
                 intra_sl_price_val = (((100 + intra_sl) / 100) * o if intra_sl_price is None else intra_sl_price) if (intra_sl or intra_sl_price) else (h + 1)
-                target_price = target_price if target_price is not None else (cl - 1)
+                target_price = (((100 - target) / 100) * o if target_price is None else target_price) if (target or target_price is not None) else (cl - 1)
                 
                 if roundtick or self.market == 'MCX':
                     sl_price_val = self.round_to_ticksize(sl_price_val, orderside, 'STOPLOSS')
@@ -888,7 +888,7 @@ class IntradayBacktest:
             elif orderside == 'BUY':
                 sl_price_val = (((100 - sl) / 100) * o if sl_price is None else sl_price) if (sl or sl_price) else (cl - 1)
                 intra_sl_price_val = (((100 - intra_sl) / 100) * o if intra_sl_price is None else intra_sl_price) if (intra_sl or intra_sl_price) else (l - 1)
-                target_price = target_price if target_price is not None else (ch + 1)
+                target_price = (((100 + target) / 100) * o if target_price is None else target_price) if (target or target_price is not None) else (ch + 1)
                 
                 if roundtick or self.market == 'MCX':
                     sl_price_val = self.round_to_ticksize(sl_price_val, orderside, 'STOPLOSS')
@@ -2059,7 +2059,7 @@ class WeeklyBacktest(IntradayBacktest):
             elif only == "PE":
                 return pe_scrip, pe_price, future_price, start_dt
 
-    def sl_check_by_given_data(self, scrip_df, o=None, sl=0, intra_sl=0, sl_price=None, target_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False, roundtick=False):
+    def sl_check_by_given_data(self, scrip_df, o=None, sl=0, intra_sl=0, sl_price=None, target=0, target_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False, roundtick=False):
         sl_flag, intra_sl_flag, target_flag, exit_time, pnl = False, False, False, '', 0
 
         try:
@@ -2078,7 +2078,7 @@ class WeeklyBacktest(IntradayBacktest):
             if orderside == 'SELL':
                 sl_price_val = (((100 + sl) / 100) * o if sl_price is None else sl_price) if (sl or sl_price) else (h + 1)
                 intra_sl_price = ((100 + intra_sl) / 100) * o if intra_sl else (h + 1)
-                target_price = target_price if target_price is not None else (l - 1)
+                target_price = (((100 - target) / 100) * o if target_price is None else target_price) if (target or target_price is not None) else (l - 1)
                 
                 if roundtick or self.market == 'MCX':
                     sl_price_val = self.round_to_ticksize(sl_price_val, orderside, 'STOPLOSS')
@@ -2092,7 +2092,7 @@ class WeeklyBacktest(IntradayBacktest):
             elif orderside == 'BUY':
                 sl_price_val = (((100 - sl) / 100) * o if sl_price is None else sl_price) if (sl or sl_price) else (l - 1)
                 intra_sl_price = ((100 - intra_sl) / 100) * o if intra_sl else (l - 1)
-                target_price = target_price if target_price is not None else (h + 1)
+                target_price = (((100 + target) / 100) * o if target_price is None else target_price) if (target or target_price is not None) else (h + 1)
                 
                 if roundtick or self.market == 'MCX':
                     sl_price_val = self.round_to_ticksize(sl_price_val, orderside, 'STOPLOSS')
@@ -2178,7 +2178,7 @@ class WeeklyBacktest(IntradayBacktest):
             else:
                 return (sl_price, sl_flag, intra_sl_flag, target_flag, exit_time, pnl)
 
-    def _sl_check_single_leg(self, start_dt, end_dt, scrip, o=None, sl=0, intra_sl=0, sl_price=None, target_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False, roundtick=False):
+    def _sl_check_single_leg(self, start_dt, end_dt, scrip, o=None, sl=0, intra_sl=0, sl_price=None, target=0, target_price=None, from_candle_close=False, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False, roundtick=False):
         sl_flag, intra_sl_flag, target_flag, exit_time, pnl = False, False, False, '', 0
 
         try:
@@ -2203,7 +2203,7 @@ class WeeklyBacktest(IntradayBacktest):
             if orderside == 'SELL':
                 sl_price_val = (((100 + sl) / 100) * o if sl_price is None else sl_price) if (sl or sl_price) else (h + 1)
                 intra_sl_price = ((100 + intra_sl) / 100) * o if intra_sl else (h + 1)
-                target_price = target_price if target_price is not None else (l - 1)
+                target_price = (((100 - target) / 100) * o if target_price is None else target_price) if (target or target_price is not None) else (l - 1)
                 
                 if roundtick or self.market == 'MCX':
                     sl_price_val = self.round_to_ticksize(sl_price_val, orderside, 'STOPLOSS')
@@ -2217,7 +2217,7 @@ class WeeklyBacktest(IntradayBacktest):
             elif orderside == 'BUY':
                 sl_price_val = (((100 - sl) / 100) * o if sl_price is None else sl_price) if (sl or sl_price) else (l - 1)
                 intra_sl_price = ((100 - intra_sl) / 100) * o if intra_sl else (l - 1)
-                target_price = target_price if target_price is not None else (h + 1)
+                target_price = (((100 + target) / 100) * o if target_price is None else target_price) if (target or target_price is not None) else (h + 1)
                 
                 if roundtick or self.market == 'MCX':
                     sl_price_val = self.round_to_ticksize(sl_price_val, orderside, 'STOPLOSS')
@@ -2304,7 +2304,7 @@ class WeeklyBacktest(IntradayBacktest):
             else:
                 return (sl_price, sl_flag, intra_sl_flag, target_flag, exit_time, pnl)
 
-    def _sl_check_combine_leg(self, start_dt, end_dt, ce_scrip, pe_scrip, o=None, sl=0, intra_sl=0, sl_price=None, intra_sl_price=None, target_price=None, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False, roundtick=False):
+    def _sl_check_combine_leg(self, start_dt, end_dt, ce_scrip, pe_scrip, o=None, sl=0, intra_sl=0, sl_price=None, intra_sl_price=None, target=0, target_price=None, orderside='SELL', from_next_minute=True, with_ohlc=False, pl_with_slipage=True, per_minute_mtm=False, roundtick=False):
         sl_flag, intra_sl_flag, target_flag, exit_time, pnl = False, False, False, '', 0
 
         try:
@@ -2329,7 +2329,7 @@ class WeeklyBacktest(IntradayBacktest):
             if orderside == 'SELL':
                 sl_price_val = (((100 + sl) / 100) * o if sl_price is None else sl_price) if (sl or sl_price) else (ch + 1)
                 intra_sl_price_val = (((100 + intra_sl) / 100) * o if intra_sl_price is None else intra_sl_price) if (intra_sl or intra_sl_price) else (h + 1)
-                target_price = target_price if target_price is not None else (cl - 1)
+                target_price = (((100 - target) / 100) * o if target_price is None else target_price) if (target or target_price is not None) else (cl - 1)
                 
                 if roundtick or self.market == 'MCX':
                     sl_price_val = self.round_to_ticksize(sl_price_val, orderside, 'STOPLOSS')
@@ -2343,7 +2343,7 @@ class WeeklyBacktest(IntradayBacktest):
             elif orderside == 'BUY':
                 sl_price_val = (((100 - sl) / 100) * o if sl_price is None else sl_price) if (sl or sl_price) else (cl - 1)
                 intra_sl_price_val = (((100 - intra_sl) / 100) * o if intra_sl_price is None else intra_sl_price) if (intra_sl or intra_sl_price) else (l - 1)
-                target_price = target_price if target_price is not None else (ch + 1)
+                target_price = (((100 + target) / 100) * o if target_price is None else target_price) if (target or target_price is not None) else (ch + 1)
                 
                 if roundtick or self.market == 'MCX':
                     sl_price_val = self.round_to_ticksize(sl_price_val, orderside, 'STOPLOSS')

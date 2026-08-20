@@ -271,6 +271,7 @@ class IntradayBacktest:
 
         self.get_single_leg_data = lru_cache(maxsize=16384)(self._get_single_leg_data)
         self.get_straddle_data = lru_cache(maxsize=16384)(self._get_straddle_data)
+        self.get_synthetic_future_data = lru_cache(maxsize=16384)(self._get_synthetic_future_data)
         self.get_strike = lru_cache(maxsize=16384)(self._get_strike)
         self.sl_check_single_leg = lru_cache(maxsize=16384)(self._sl_check_single_leg)
         self.sl_check_combine_leg = lru_cache(maxsize=16384)(self._sl_check_combine_leg)
@@ -348,6 +349,42 @@ class IntradayBacktest:
         start_i = np.searchsorted(dt_int, np.datetime64(start_dt, 'ns').view('int64'), side='left')
         end_i = np.searchsorted(dt_int, np.datetime64(end_dt, 'ns').view('int64'), side='right')
         return entry['df'].iloc[start_i:end_i]
+
+    def get_synthetic_future(self, current_dt, strike=None):
+        """Synthetic future at current_dt (ATM pair if strike is None). None if a leg is missing."""
+        synthetic_data = self.get_synthetic_future_data(strike)
+        synthetic_row = synthetic_data[synthetic_data['date_time'] == current_dt]
+        return None if synthetic_row.empty else synthetic_row['sync_future'].iloc[0]
+
+    def _get_synthetic_future_data(self, strike=None):
+        """Per-minute synthetic future (put-call parity), ATM re-picked each minute if strike is None."""
+        synthetic_cols = ["date_time", "atm_strike", "ce_price", "pe_price", "sync_future"]
+
+        if strike is not None:
+            strike = get_strike(strike) if isinstance(strike, str) else strike
+            ce_scrip, pe_scrip = f"{strike}CE", f"{strike}PE"
+
+        index_times = self.future_data.index.time
+        valid_times = self.future_data.index[(index_times >= self.meta_start_time) & (index_times <= self.meta_end_time)]
+
+        synthetic_data = []
+        for current_dt in valid_times:
+
+            if strike is None:
+                atm_ce_scrip, _, ce_price, pe_price, _, _ = self.get_straddle_strike(current_dt, current_dt)
+                if atm_ce_scrip is None:
+                    continue
+                atm_strike = get_strike(atm_ce_scrip)
+            else:
+                try:
+                    ce_price, pe_price = self._price_lookup[(current_dt, ce_scrip)], self._price_lookup[(current_dt, pe_scrip)]
+                except KeyError:
+                    continue
+                atm_strike = strike
+
+            synthetic_data.append((current_dt, atm_strike, ce_price, pe_price, atm_strike + ce_price - pe_price))
+
+        return pd.DataFrame(synthetic_data, columns=synthetic_cols)
 
     def _get_straddle_data(self, start_dt, end_dt, ce_scrip, pe_scrip, seperate=False):
 
@@ -1745,6 +1782,7 @@ class WeeklyBacktest(IntradayBacktest):
 
         self.get_single_leg_data = lru_cache(maxsize=16384)(self._get_single_leg_data)
         self.get_straddle_data = lru_cache(maxsize=16384)(self._get_straddle_data)
+        self.get_synthetic_future_data = lru_cache(maxsize=16384)(self._get_synthetic_future_data)
         self.get_strike = lru_cache(maxsize=16384)(self._get_strike)
         self.sl_check_single_leg = lru_cache(maxsize=16384)(self._sl_check_single_leg)
         self.sl_check_combine_leg = lru_cache(maxsize=16384)(self._sl_check_combine_leg)
@@ -1757,10 +1795,6 @@ class WeeklyBacktest(IntradayBacktest):
         self.sl_range_check_combine_leg = lru_cache(maxsize=16384)(self._sl_range_check_combine_leg)
         self.sl_range_trail_check_combine_leg = lru_cache(maxsize=16384)(self._sl_range_trail_check_combine_leg)
 
-    def get_synthetic_future(self, straddle_strike, ce_price, pe_price):
-        synthetic_future = straddle_strike + ce_price - pe_price
-        return synthetic_future
-        
     def get_sl_range(self, strike, premium, range_sl, intra_range_sl):
         range_limit = premium * (range_sl/100)
         lower_range = strike - range_limit

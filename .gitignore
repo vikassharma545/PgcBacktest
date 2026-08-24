@@ -3,3 +3,19 @@
 **/__pycache__
 **/*_DashBoard*
 pgcbacktest.egg-info
+
+# ignore these anywhere in the repo...
+Combine By ParameterWise.py
+DashBoard FileMaker.py
+DashBoard FileMakerParquet.py
+DashBoard FileMakerParquetNormalised.py
+PgcDashboardExcelDuckDB.py
+Run Code.py
+
+# ...except inside ENGINE (any depth)
+!ENGINE/**/Combine By ParameterWise.py
+!ENGINE/**/DashBoard FileMaker.py
+!ENGINE/**/DashBoard FileMakerParquet.py
+!ENGINE/**/DashBoard FileMakerParquetNormalised.py
+!ENGINE/**/PgcDashboardExcelDuckDB.py
+!ENGINE/**/Run Code.py

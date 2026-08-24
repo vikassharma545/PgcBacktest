@@ -716,6 +716,14 @@ def get_parameter_data(code, parameter_path):
         parameter['short_type'] = parameter['short_type'].str.upper()
         parameter['long_type'] = parameter['long_type'].str.upper()
 
+    elif code == 'CE_BUTTERFLY':
+        
+        parameter['cap_action'] = parameter['cap_action'].astype(str).str.strip().str.upper()
+        
+        # max_rolls: -1 = unlimited, 0 = never roll, N = stop after N rolls
+        # action only matters when a cap can bind - canonicalise -1 so drop_duplicates collapses the pairs
+        parameter.loc[parameter['max_rolls'] == -1, 'cap_action'] = 'HOLD'
+
     parameter.drop_duplicates(inplace=True, ignore_index=True)
     return parameter, len(parameter)
 

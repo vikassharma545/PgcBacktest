@@ -253,8 +253,8 @@ def convert_notebook_to_script(pickle_path: Path, notebook_path: Path, parameter
         
     return code, output_csv_path, run_scrip_path
 
-def get_len_of_parameter_data(code, parameter_path):
-    _, parameter_len = get_parameter_data(code, parameter_path)
+def get_len_of_parameter_data(code, parameter_path, time_filter=True):
+    _, parameter_len = get_parameter_data(code, parameter_path, time_filter=time_filter)
     return parameter_len
         
 def modify_script_for_run_code(run_scrip_path, is_remote=False, include_rar=False, dir_pickle_path=None):
@@ -452,12 +452,13 @@ if __name__ == "__main__":
     code, output_csv_path, run_scrip_path = convert_notebook_to_script(pickle_path, notebook_path, parameter_path, meta_data_path)
     run_uid = get_run_uid(notebook_path)
 
-    parameter_len = get_len_of_parameter_data(code, parameter_path)
     meta_data, _ = get_meta_data(code, meta_data_path)
+    is_weekly = True if ("from_dte" in meta_data.columns) and ("to_dte" in meta_data.columns) else False
+
+    parameter_len = get_len_of_parameter_data(code, parameter_path, time_filter=not is_weekly)
     no_of_chunk = math.ceil(parameter_len/chunk_size)
     sleep_config = get_sleep_config(parameter_len)
     
-    is_weekly = True if ("from_dte" in meta_data.columns) and ("to_dte" in meta_data.columns) else False
     is_remote = True if is_network_disk(output_csv_path) else False
     include_rar = False
     weeks_or_dates = "Weeks" if ("from_dte" in meta_data.columns) and ("to_dte" in meta_data.columns) else "Dates"

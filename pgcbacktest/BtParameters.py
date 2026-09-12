@@ -80,7 +80,7 @@ def get_meta_row_data(meta_row, pickle_path, weekly=False):
 
         return index, from_dte, to_dte, from_date, to_date, start_time, end_time, week_lists
 
-def get_parameter_data(code, parameter_path):
+def get_parameter_data(code, parameter_path, time_filter=True):
     
     parameter = pd.read_csv(parameter_path)
     for col in parameter.columns:
@@ -92,11 +92,31 @@ def get_parameter_data(code, parameter_path):
     parameter = pd.DataFrame(list(itertools.product(*[globals()[f'{col}'] for col in parameter.columns])), columns=parameter.columns)
     
     # filter - entry < (exit_time - 5min)
-    parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
+    if time_filter:
+        parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
 
     if code.endswith('_PSL') and "last_trade_time_and_interval" in parameter.columns:
         parameter[['last_trade_time', 'trade_interval']] = parameter['last_trade_time_and_interval'].str.strip().str.split(',', expand=True)
         parameter['last_trade_time'] = pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time
+
+    # filter - entry <= last_trade_time < (exit_time - 5min)
+    if code.endswith('_PSL') and "last_trade_time" in parameter.columns:
+        parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time <= pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time]
+        parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
+
+    # filter - exit_time <= entry_time2 < (exit_time2 - 5min)
+    if "entry_time2" in parameter.columns:
+        parameter = parameter[pd.to_datetime(parameter['exit_time'], format='%H:%M:%S').dt.time <= (pd.to_datetime(parameter['entry_time2'], format='%H:%M:%S')).dt.time]
+        parameter = parameter[pd.to_datetime(parameter['entry_time2'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time2'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
+
+    # filter - entry_time2 <= last_trade_time2 < (exit_time2 - 5min)
+    if "last_trade_time2" in parameter.columns:
+        parameter = parameter[pd.to_datetime(parameter['entry_time2'], format='%H:%M:%S').dt.time <= pd.to_datetime(parameter['last_trade_time2'], format='%H:%M:%S').dt.time]
+        parameter = parameter[pd.to_datetime(parameter['last_trade_time2'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time2'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
+
+    # filter - entry <= till_time
+    if "till_time" in parameter.columns:
+        parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time <= pd.to_datetime(parameter['till_time'], format='%H:%M:%S').dt.time]
 
     if (code == 'B120') or (code == 'B120_TTC_RE') or (code == 'B120W') or (code == 'B120M') or (code == 'B120_SI'):
     
@@ -127,10 +147,6 @@ def get_parameter_data(code, parameter_path):
         
     elif (code == 'B120_NO_UT_TRAIL_PSL'):
         
-        # filter - entry < (exit_time|endtime - 5min)
-        parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time <= pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time]
-        parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
-        
         parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
         
         parameter['trade_interval'] = parameter['trade_interval'].str.upper()
@@ -138,10 +154,6 @@ def get_parameter_data(code, parameter_path):
         parameter['method'] = parameter['method'].str.upper()
 
     elif (code == 'B120_PSL') or (code == 'B120_SI_PSL') or (code == 'B120W_PSL') or (code == 'B120_UT_TRAIL_PSL'):
-        
-        # filter - entry < (exit_time|endtime - 5min)
-        parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time <= pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time]
-        parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
         
         # filter - where sl = 0
         parameter.loc[parameter['sl'] == 0, 'ut_sl'] = 0
@@ -194,10 +206,6 @@ def get_parameter_data(code, parameter_path):
         
     elif (code == 'B120_RE_PSL') or (code == 'B120_DUT_RE_PSL') or (code == 'B120_RE_SI_PSL') or (code == 'B120_TTC_RE_PSL') or (code == 'B120_TTC_RE_SI_PSL'):
             
-        # filter - entry < (exit_time|endtime - 5min)
-        parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time <= pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time]
-        parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
-        
         # filter - where sl = 0
         parameter.loc[parameter['sl'] == 0, 'ut_sl'] = 0
         parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
@@ -212,9 +220,6 @@ def get_parameter_data(code, parameter_path):
             
     elif (code == 'B120G'):
         
-        parameter = parameter[pd.to_datetime(parameter['exit_time'], format='%H:%M:%S').dt.time <= (pd.to_datetime(parameter['entry_time2'], format='%H:%M:%S')).dt.time]
-        parameter = parameter[pd.to_datetime(parameter['entry_time2'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time2'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
-        
         # filter - where sl = 0
         parameter.loc[parameter['sl'] == 0, 'ut_sl'] = 0
         parameter.loc[parameter['sl2'] == 0, 'ut_sl2'] = 0
@@ -226,16 +231,6 @@ def get_parameter_data(code, parameter_path):
         parameter['method'] = parameter['method'].str.upper()
 
     elif (code == 'B120G_PSL'):
-        
-        # filter - entry < (exit_time|endtime - 5min)
-        parameter = parameter[pd.to_datetime(parameter['exit_time'], format='%H:%M:%S').dt.time <= (pd.to_datetime(parameter['entry_time2'], format='%H:%M:%S')).dt.time]
-        parameter = parameter[pd.to_datetime(parameter['entry_time2'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time2'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
-        
-        parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time <= pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time]
-        parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
-        
-        parameter = parameter[pd.to_datetime(parameter['entry_time2'], format='%H:%M:%S').dt.time <= pd.to_datetime(parameter['last_trade_time2'], format='%H:%M:%S').dt.time]
-        parameter = parameter[pd.to_datetime(parameter['last_trade_time2'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time2'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
         
         def check_B120G_PSL(row):
             today = datetime.datetime.today()
@@ -325,8 +320,6 @@ def get_parameter_data(code, parameter_path):
         parameter['method'] = parameter['method'].str.upper()
 
     elif (code == 'DT_PSL') or (code == 'DT_SI_PSL') or (code == 'DT_RE_PSL') or (code == 'DT_FS_PSL'):
-        parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time <= pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time]
-        parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
         
         # filter - where sl = 0
         parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
@@ -352,10 +345,7 @@ def get_parameter_data(code, parameter_path):
         
         if code == 'NRE_SI':
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
-            
-        if code == 'NRE_CC_RE_TillTime':
-            parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time <= pd.to_datetime(parameter['till_time'], format='%H:%M:%S').dt.time]
-            
+
     elif (code == 'NRE_DT'):
         # filter - where sl = 0
         parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
@@ -364,10 +354,6 @@ def get_parameter_data(code, parameter_path):
         parameter['method'] = parameter['method'].str.upper()
             
     elif (code == 'NREW_PSL'):
-        
-        # filter - entry < (exit_time - 5min)
-        parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time <= pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time]
-        parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
         
         # filter - where sl = 0
         parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
@@ -380,10 +366,6 @@ def get_parameter_data(code, parameter_path):
 
     elif (code == 'NRE_PSL') or (code == 'NRE_CC_PSL') or (code == 'NRE_SI_PSL') or (code == 'NRE_DT_PSL') or (code == 'NRE_CC_RE_TillTime_PSL'):
 
-        # filter - entry < (exit_time - 5min)
-        parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time <= pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time]
-        parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
-
         # filter - where sl = 0
         parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
 
@@ -395,9 +377,6 @@ def get_parameter_data(code, parameter_path):
         parameter['method'] = parameter['method'].str.upper()
         if code == 'NRE_SI_PSL':
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
-        
-        if code == 'NRE_CC_RE_TillTime_PSL':
-            parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time <= pd.to_datetime(parameter['till_time'], format='%H:%M:%S').dt.time]
 
 
     elif (code == 'RED') or (code == 'RED_SI') or (code == 'REDW'):
@@ -412,9 +391,6 @@ def get_parameter_data(code, parameter_path):
 
 
     elif (code == 'RED_PSL') or (code == 'RED_SI_PSL'):
-        
-        parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time <= pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time]
-        parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
         
         # filter - where sl = 0
         parameter.loc[parameter['sl'] == 0, 'method'] = 'HL'
@@ -470,9 +446,6 @@ def get_parameter_data(code, parameter_path):
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
     
     elif (code == 'SBS_PSL') or (code == 'SBS_SI_PSL'):
-        
-        parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time <= pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time]
-        parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
         
         # filter - where sl = 0
         parameter.loc[(parameter['sell_sl'] == 0), 'method'] = 'HL'
@@ -534,9 +507,6 @@ def get_parameter_data(code, parameter_path):
         
     elif code == "SREW_RANGE_PSL":
         
-        parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time <= pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time]
-        parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
-        
         parameter['intra_sl'] = parameter.apply(lambda row: row['sl'] + float(row['intra_sl'].split('+')[-1]) if '+' in str(row['intra_sl']) else float(row['intra_sl']), axis=1)
         parameter = parameter[~((parameter['intra_sl'] != 0) & (parameter['intra_sl'] <= parameter['sl']))]
 
@@ -546,9 +516,6 @@ def get_parameter_data(code, parameter_path):
 
 
     elif (code == 'SRE_PSL') or (code == 'SRE_SI_PSL') or (code == 'SREW_PSL'):
-        
-        parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time <= pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time]
-        parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
         
         #filer intra sl
         parameter['intra_sl'] = parameter.apply(lambda row: row['sl'] + float(row['intra_sl'].split('+')[-1]) if '+' in str(row['intra_sl']) else float(row['intra_sl']), axis=1)
@@ -562,9 +529,6 @@ def get_parameter_data(code, parameter_path):
             
             
     elif (code == 'SRE_SEPARATE_LEG_SL_PSL'):
-        
-        parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time <= pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time]
-        parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
         
         parameter['trade_interval'] = parameter['trade_interval'].str.upper()
         parameter['orderside'] = parameter['orderside'].str.upper()
@@ -597,9 +561,6 @@ def get_parameter_data(code, parameter_path):
         
     elif (code == 'STARGET_PSL'):
         
-        parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time <= pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time]
-        parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
-
         parameter['intra_sl'] = parameter.apply(lambda row: row['sl'] + float(row['intra_sl'].split('+')[-1]) if '+' in str(row['intra_sl']) else float(row['intra_sl']), axis=1)
         parameter = parameter[~((parameter['intra_sl'] != 0) & (parameter['intra_sl'] < parameter['sl']))]
 
@@ -628,9 +589,6 @@ def get_parameter_data(code, parameter_path):
     
     elif (code == 'SUT_PSL') or (code == 'SUT_SI_PSL') or (code == 'SUTW_PSL'):
         
-        parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time <= pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time]
-        parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
-        
         #filer intra sl
         parameter['intra_sl'] = parameter.apply(lambda row: row['sl'] + float(row['intra_sl'].split('+')[-1]) if '+' in str(row['intra_sl']) else float(row['intra_sl']), axis=1)
         parameter = parameter[~((parameter['intra_sl'] != 0) & (parameter['intra_sl'] < parameter['sl']))]
@@ -647,9 +605,6 @@ def get_parameter_data(code, parameter_path):
             parameter['std_indicator'] = parameter['std_indicator'].str.upper()
         
     elif (code == 'SUT_TT_PSL'):
-        
-        parameter = parameter[pd.to_datetime(parameter['entry_time'], format='%H:%M:%S').dt.time <= pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time]
-        parameter = parameter[pd.to_datetime(parameter['last_trade_time'], format='%H:%M:%S').dt.time < (pd.to_datetime(parameter['exit_time'], format='%H:%M:%S')-pd.Timedelta(minutes=5)).dt.time]
         
         #filer intra sl
         parameter['intra_sl'] = parameter.apply(lambda row: row['sl'] + float(row['intra_sl'].split('+')[-1]) if '+' in str(row['intra_sl']) else float(row['intra_sl']), axis=1)

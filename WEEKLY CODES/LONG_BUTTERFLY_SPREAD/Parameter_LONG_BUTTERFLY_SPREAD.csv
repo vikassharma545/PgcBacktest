@@ -1,0 +1,4 @@
+entry_time,exit_time,option_type,body_om,wing_width,sl,target,dte1re,dte2re,dte3re,dte4re,dte5re
+09:20:00,15:29:00,CE,0,2,25,50,3,3,3,3,3
+,,PE,0.5SD,3,50,100,2,2,2,2,2
+,,,,,75,,1,1,1,1,1

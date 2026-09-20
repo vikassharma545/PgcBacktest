@@ -180,7 +180,7 @@ class IntradayBacktest:
         ('BUY', 'DECAY'): math.ceil,
     }
 
-    token, group_id = '5156026417:AAExQbrMAPrV0qI8tSYplFDjZltLBzXTm1w', '-607631145'
+    token, group_id = os.environ.get("PGC_TELEGRAM_BOT_TOKEN", ""), '-607631145'
 
     # In-memory cache of processed data, shared across all instances in this process.
     _MEMORY_CACHE = {}

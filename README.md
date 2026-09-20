@@ -966,3 +966,13 @@ Each has a corresponding `plot_*()` function for matplotlib visualization.
 ## Author
 
 **Vikas Sharma** — [LinkedIn](https://www.linkedin.com/in/vikas-sharma-coder/)
+
+## Telegram alerts
+
+Alerts are optional. The bot token is read from the `PGC_TELEGRAM_BOT_TOKEN` environment variable, never from code:
+
+```powershell
+setx PGC_TELEGRAM_BOT_TOKEN "<your bot token>"
+```
+
+If the variable is not set, alerts are skipped and the run continues.

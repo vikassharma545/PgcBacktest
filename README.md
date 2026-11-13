@@ -13,7 +13,7 @@ PGCBacktest is a Python SDK for backtesting **intraday and weekly options sellin
 winget install --id Git.Git -e --source winget
 
 # Install PGCBacktest
-pip install --upgrade --force-reinstall git+https://vikassharma545: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@github.com/vikassharma545/PgcBacktest.git
+pip install --upgrade --force-reinstall git+https://github.com/vikassharma545/PgcBacktest.git
 ```
 
 ### Dependencies
